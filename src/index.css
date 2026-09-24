@@ -1,0 +1,200 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    @apply bg-slate-50 text-slate-800;
+  }
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-300 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-400;
+  }
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-slideIn {
+  animation: slideIn 0.25s ease-out;
+}
+
+@layer components {
+  .data-table {
+    @apply w-full text-sm;
+  }
+  .data-table thead th {
+    @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 bg-slate-50 border-b border-slate-200;
+  }
+  .data-table tbody td {
+    @apply px-4 py-3 border-b border-slate-100 text-slate-700;
+  }
+  .data-table tbody tr {
+    @apply transition hover:bg-slate-50;
+  }
+}
+
+/* ============================================================
+   PDF capture mode — used by Electron printToPDF (printPdf.ts)
+   Hides everything except the #pdf-print-overlay
+   ============================================================ */
+body.pdf-capture-mode > *:not(#pdf-print-overlay) {
+  display: none !important;
+  visibility: hidden !important;
+}
+body.pdf-capture-mode {
+  overflow: hidden !important;
+  background: #fff !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+body.pdf-capture-mode #pdf-print-overlay {
+  display: block !important;
+  visibility: visible !important;
+}
+
+/* ============================================================
+   Print styles — hide chrome, keep document content
+   Used by window.print() (physical printer + browser PDF)
+   ============================================================ */
+@media print {
+  @page {
+    margin: 0 !important;
+  }
+
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    color: #0f172a !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Clean overlay print rendering */
+  body.pdf-capture-mode #pdf-print-overlay {
+    position: static !important;
+    inset: auto !important;
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+    background: transparent !important;
+  }
+
+  /* Hide ALL app chrome & UI */
+  aside,
+  header:not(.brand-header),
+  nav,
+  .no-print,
+  button:not(.print-keep),
+  /* Hide modal chrome — title bar, footer, close button */
+  .fixed.inset-0.z-50 > div > .border-b,
+  .fixed.inset-0.z-50 > div > .border-t,
+  .fixed.inset-0.z-50 > div > div:first-child,
+  .fixed.inset-0.z-50 > div > div:last-child:not(.px-6.py-5) {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* Modal backdrop → transparent static block */
+  .fixed.inset-0.z-50 {
+    position: static !important;
+    inset: auto !important;
+    display: block !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* Modal panel → full-width, no shadow */
+  .fixed.inset-0.z-50 > div {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    border: none !important;
+    animation: none !important;
+  }
+
+  /* Remove modal body scroll constraint */
+  .fixed.inset-0.z-50 .max-h-\[calc\(100vh-16rem\)\],
+  .fixed.inset-0.z-50 .max-h-\[70vh\] {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* Print document fills the page */
+  .print-document,
+  .print-area {
+    display: block !important;
+    width: 100% !important;
+    max-height: none !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  .data-table thead th {
+    background: #f8fafc !important;
+    border-bottom: 1px solid #cbd5e1 !important;
+  }
+
+  .data-table tbody td {
+    border-bottom: 1px solid #e2e8f0 !important;
+  }
+
+  /* Hide the page content behind the modal */
+  main > .animate-fadeIn > *:not(.fixed) {
+    display: none !important;
+  }
+}
+

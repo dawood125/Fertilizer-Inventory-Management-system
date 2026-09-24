@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saeed And Co - Ink Saver Gray Receipt</title>
+    <style>
+    * {
+        box-sizing: border-box;
+    }
+
+    html, body {
+        margin: 0;
+        padding: 0;
+        background: #ffffff;
+        font-family: Arial, Helvetica, sans-serif;
+        color: #000000;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    /* =====================================================
+       INK-SAVER GRAY CANVAS (HALF-A4 PORTRAIT / A5)
+    ===================================================== */
+    .invoice {
+        width: 148.5mm;
+        min-height: 210mm;
+        margin: 15px auto;
+        padding: 8mm 7mm;
+        background: #ffffff;
+        box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        overflow: hidden;
+    }
+
+    /* =====================================================
+   HORIZONTAL BRAND HEADER
+===================================================== */
+
+.brand-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    margin-bottom: 3px;
+    min-height: 28px;
+}
+
+/* LEFT SIDE BRAND */
+.brand-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.logo-img {
+    height: 24px;
+    max-width: 55px;
+    object-fit: contain;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.logo-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 900;
+    font-style: italic;
+    color: #333333;
+    border-bottom: 1.5px solid #333333;
+    padding: 0 3px;
+    transform: skew(-10deg);
+}
+
+.company-title {
+    font-size: 13px;
+    font-weight: 900;
+    color: #000000;
+    letter-spacing: 0.5px;
+    margin: 0;
+}
+
+.invoice-subtitle {
+    font-size: 9px;
+    font-weight: 900;
+    color: #000000;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    margin: 0;
+    text-align: right;
+}
+
+    /* GRAY OUTLINE BUSINESS BANNER (INK-SAVER) */
+    .business-banner {
+        border: 1px solid #777777;
+        background: #fafafa;
+        color: #000000;
+        border-radius: 3px;
+        padding: 4px 6px;
+        display: grid;
+        grid-template-columns: 1.2fr 1fr 1fr;
+        row-gap: 2px;
+        column-gap: 6px;
+        margin-top: 3px;
+    }
+
+    .banner-box .label {
+        font-size: 5.5px;
+        text-transform: uppercase;
+        color: #555555;
+        font-weight: 700;
+        display: block;
+    }
+
+    .banner-box .value {
+        font-size: 7.5px;
+        font-weight: 700;
+        color: #000000;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: block;
+    }
+
+    /* CUSTOMER & NTN CARDS */
+    .customer-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        margin-top: 3px;
+        padding: 1px 4px;
+    }
+
+    .meta-label {
+        font-size: 6px;
+        color: #555555;
+        font-weight: 600;
+        display: block;
+    }
+
+    .meta-val {
+        font-size: 7.5px;
+        font-weight: 800;
+        color: #000000;
+        display: block;
+    }
+
+    .ntn-card {
+        border: 1px solid #aaaaaa;
+        border-radius: 3px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        margin-top: 2px;
+        padding: 3px 6px;
+        background: #ffffff;
+    }
+
+    /* TABLE (LOW INK USAGE) */
+    .table-container {
+        margin-top: 4px;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+    }
+
+    thead th {
+        background: #eeeeee;
+        color: #000000;
+        font-size: 6.5px;
+        font-weight: 800;
+        padding: 3px 2px;
+        text-align: center;
+        border: 1px solid #888888;
+    }
+
+    tbody td {
+        border: 1px solid #cccccc;
+        font-size: 7px;
+        padding: 3px 2px;
+        text-align: center;
+        color: #000000;
+    }
+
+    tbody td.product { text-align: left; padding-left: 4px; font-weight: 700; }
+    tbody td.total { text-align: right; padding-right: 4px; font-weight: 700; }
+
+    /* SUMMARY SECTION */
+    .summary-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 3px;
+        padding-top: 3px;
+    }
+
+    .summary-col {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .summary-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 7px;
+        color: #333333;
+    }
+
+    .summary-row.bold {
+        font-weight: 800;
+        color: #000000;
+    }
+
+    .summary-row.subtotal {
+        border-bottom: 1px solid #cccccc;
+        padding-bottom: 2px;
+    }
+
+    .summary-row.net-total {
+        font-size: 9px;
+        font-weight: 900;
+        color: #000000;
+        margin-top: 1px;
+    }
+    .bold {
+        font-size: 9px;
+        font-weight: 900;
+        color: #000000;
+        margin-top: 1px;
+    }
+
+    .summary-row.paid { color: #000000; font-weight: 700; }
+    .summary-row.remaining { color: #000000; font-weight: 800; }
+/* =====================================================
+   RECEIPT FOOTER
+===================================================== */
+
+.footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 1px solid #999;
+    margin-top: 5px;
+    padding-top: 4px;
+    font-size: 6.5px;
+    line-height: 1.2;
+    color: #444;
+}
+
+.footer-left {
+    text-align: left;
+    white-space: nowrap;
+}
+
+.footer-right {
+    text-align: right;
+    direction: rtl;
+    white-space: nowrap;
+
+    font-family: Arial, "Noto Naskh Arabic", sans-serif;
+    font-size: 7px;
+    line-height: 1.35;
+    font-weight: 700;
+    color: #222;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1.5px;
+}
+
+.footer-right > div {
+    width: 100%;
+    text-align: right;
+    direction: rtl;
+}
+
+.footer strong {
+    color: #000;
+    font-weight: 800;
+}
+
+.footer-divider {
+    color: #999;
+    margin: 0 3px;
+}
+    /* PRINT OPTIMIZATION RULES */
+    @media print {
+        @page {
+            size: 148.5mm 210mm; /* Half-A4 / A5 Portrait */
+            margin: 0;
+        }
+
+        html, body {
+            width: 148.5mm !important;
+            height: auto !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #ffffff !important;
+        }
+
+        .invoice {
+            width: 148.5mm !important;
+            min-height: auto !important;
+            height: auto !important;
+            margin: 0 !important;
+            padding: 4mm 5mm !important;
+            box-shadow: none !important;
+            border: none !important;
+            page-break-after: auto !important;
+        }
+
+        .invoice-table {
+            page-break-inside: auto !important;
+        }
+
+        .invoice-table thead {
+            display: table-header-group !important;
+        }
+
+        .invoice-table tbody tr {
+            page-break-inside: avoid !important;
+            page-break-after: auto !important;
+        }
+
+        .summary-col, .summary-section, .footer {
+            page-break-inside: avoid !important;
+        }
+
+        /* Enforce pure black & clear borders on print */
+        * {
+            -webkit-print-color-adjust: economy;
+            print-color-adjust: economy;
+        }
+    }
+    </style>
+</head>
+<body>
+
+<div class="invoice">
+    <div>
+        <!-- TOP BRAND HEADER -->
+      <!-- TOP BRAND HEADER -->
+<header class="brand-header">
+
+    <!-- LEFT: BRAND -->
+    <div class="brand-info">
+        <img src="logo.png" alt="Logo" class="logo-img">
+        <div class="company-title">SAEED AND CO</div>
+    </div>
+
+    <!-- RIGHT: INVOICE TYPE -->
+    <div class="invoice-subtitle">
+        SALES INVOICE
+    </div>
+
+</header>
+
+        <!-- INK-SAVER GRAY BUSINESS BANNER -->
+        <section class="business-banner">
+            <div class="banner-box">
+                <span class="label">Business</span>
+                <span class="value">SAEED AND CO</span>
+            </div>
+            <div class="banner-box" style="grid-column: span 2;">
+                <span class="label">Address</span>
+                <span class="value">stadium khalid sheikhupura</span>
+            </div>
+            <div class="banner-box">
+                <span class="label">Phone</span>
+                <span class="value">03244427718</span>
+            </div>
+            <div class="banner-box">
+                <span class="label">Invoice #</span>
+                <span class="value">INV-20260804-9156</span>
+            </div>
+           <div class="banner-box">
+    <span class="label">Date & Time</span>
+    <span class="value">04 Aug 2026 | 04:45 AM</span>
+</div>
+        </section>
+
+        <!-- CUSTOMER DETAILS -->
+        <section class="customer-row">
+            <div>
+                <span class="meta-label">Customer</span>
+                <span class="meta-val">Walk-in</span>
+            </div>
+            <div>
+                <span class="meta-label">Order #</span>
+                <span class="meta-val">ORD-20260804-1494</span>
+            </div>
+        </section>
+
+        <!-- NTN CARD -->
+        <section class="ntn-card">
+            <div>
+                <span class="meta-label">BUSINESS NTN</span>
+                <span class="meta-val">3552455</span>
+            </div>
+            <div>
+                <span class="meta-label">CUSTOMER NTN</span>
+                <span class="meta-val">—</span>
+            </div>
+        </section>
+
+        <!-- TABLE SECTION -->
+        <section class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 5%;">Sr</th>
+                        <th style="width: 25%;">Product</th>
+                        <th style="width: 10%;">Carton</th>
+                        <th style="width: 10%;">Packing</th>
+                        <th style="width: 12%;">Box Rate</th>
+                        <th style="width: 13%;">Carton Rate</th>
+                        <th style="width: 12%;">Amount</th>
+                        <th style="width: 8%;">Scheme</th>
+                        <th style="width: 15%;">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>1</td>
+                        <td class="product">red apple</td>
+                        <td>1</td>
+                        <td>24</td>
+                        <td>Rs 128.33</td>
+                        <td>Rs 3,080</td>
+                        <td>Rs 3,080</td>
+                        <td>—</td>
+                        <td class="total">Rs 3,080</td>
+                    </tr>
+                    <tr>
+                        <td>2</td>
+                        <td class="product">Power</td>
+                        <td>1</td>
+                        <td>24</td>
+                        <td>Rs 5.63</td>
+                        <td>Rs 135</td>
+                        <td>Rs 135</td>
+                        <td>—</td>
+                        <td class="total">Rs 135</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+    </div>
+
+    <!-- LOWER SUMMARY AND FOOTER -->
+    <div>
+        <section class="summary-grid">
+            <div class="summary-col">
+                <div class="summary-row">
+                    <span>Total Cartons</span>
+                    <strong>2.00</strong>
+                </div>
+                <div class="summary-row">
+                    <span>Previous Balance</span>
+                    <strong>Rs 0</strong>
+                </div>
+                <div class="summary-row bold">
+                    <span>Current Balance</span>
+                    <strong>Rs 3,215</strong>
+                </div>
+            </div>
+
+            <div class="summary-col">
+                <div class="summary-row subtotal">
+                    <span>Sub Total</span>
+                    <span>Rs 3,215</span>
+                </div>
+                <div class="summary-row net-total">
+                    <span>Net Total</span>
+                    <span>Rs 3,215</span>
+                </div>
+                <div class="summary-row paid">
+                    <span>Paid (cash)</span>
+                    <span>Rs 0</span>
+                </div>
+                <div class="summary-row remaining">
+                    <span>Remaining</span>
+                    <span>Rs 3,215</span>
+                </div>
+            </div>
+        </section>
+
+    <footer class="footer">
+
+    <!-- SOFTWARE / CONTACT -->
+    <div class="footer-left">
+        <strong>Software Solution By</strong>
+        <span class="footer-divider">|</span>
+        AIWA Logics
+        <span class="footer-divider">|</span>
+        032 44427718
+    </div>
+
+    <!-- DISCLAIMER -->
+    <div class="footer-right">
+        <div>بل کے بغیر خریدا ہوا مال واپس یا تبدیل نہ ہو گا۔</div>
+        <div>سیلز مین کو بل کے بغیر کیش ادا کرنے کا دکاندار خود ذمہ دار ہوگا۔</div>
+    </div>
+
+</footer>
+    </div>
+</div>
+
+</body>
+</html>
