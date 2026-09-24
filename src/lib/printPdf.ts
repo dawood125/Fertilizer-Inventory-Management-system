@@ -19,10 +19,10 @@ declare global {
 
 /**
  * Activate print-mode on the page: hides everything except a cloned copy of the
- * `#print-preview-content` (or `.print-document`) content.
+ * `.invoice-card` (or `#print-preview-content` / `.print-document`) content.
  */
 function enterPrintMode(options?: { halfPage?: boolean }): (() => void) | null {
-  const sourceEl = document.querySelector('#print-preview-content') || document.querySelector('.print-document');
+  const sourceEl = document.querySelector('.invoice-card') || document.querySelector('#print-preview-content') || document.querySelector('.print-document');
   if (!sourceEl) return null;
 
   // Create a full-page overlay with ONLY the document content
@@ -46,8 +46,6 @@ function enterPrintMode(options?: { halfPage?: boolean }): (() => void) | null {
   clone.style.setProperty('overflow', 'visible', 'important');
   clone.style.setProperty('border', 'none', 'important');
   clone.style.setProperty('border-radius', '0', 'important');
-  clone.style.setProperty('padding', '0', 'important');
-  clone.style.setProperty('margin', '0', 'important');
   clone.style.setProperty('box-shadow', 'none', 'important');
   overlay.appendChild(clone);
 
@@ -145,21 +143,35 @@ export async function savePrintPdf(
   
   // Browser mode: directly generate and download PDF file to computer
   try {
-    const sourceEl = (document.querySelector('#print-preview-content') || document.querySelector('.print-document')) as HTMLElement | null;
+    const sourceEl = (
+      document.querySelector('.invoice-card') ||
+      document.querySelector('#print-preview-content') ||
+      document.querySelector('.print-document')
+    ) as HTMLElement | null;
+
     if (sourceEl) {
       // @ts-ignore - html2pdf.js module typing
       const html2pdfModule = await import('html2pdf.js');
       const html2pdf = html2pdfModule.default || html2pdfModule;
+
       const opt: any = {
-        margin: options?.halfPage ? [0, 0, 0, 0] : [4, 4, 4, 4],
+        margin: options?.halfPage ? [3, 4, 3, 4] : [5, 6, 5, 6],
         filename: suggested,
         image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, logging: false },
+        html2canvas: {
+          scale: 3, // 300 DPI high resolution
+          useCORS: true,
+          logging: false,
+          letterRendering: true,
+          scrollX: 0,
+          scrollY: 0,
+        },
         jsPDF: {
           unit: 'mm',
-          format: options?.halfPage ? [148.5, 210] : 'a4',
+          format: options?.halfPage ? 'a5' : 'a4',
           orientation: 'portrait',
         },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
       };
       await (html2pdf() as any).set(opt).from(sourceEl).save();
       return 'saved';

@@ -585,7 +585,7 @@ export function PurchaseReturns() {
         open={!!viewing}
         onClose={() => setViewing(null)}
         title={viewing ? `Purchase Return ${viewing.return_number}` : ''}
-        size="md"
+        size="xl"
         footer={
           <div className="flex w-full justify-between items-center">
             <div>

@@ -119,12 +119,14 @@ export function SalesInvoiceDocument({
           max-width: 100%;
           min-height: auto;
           margin: 0 auto;
-          padding: ${isA4 ? '4mm 8mm 6mm 8mm' : '2mm 6mm 3mm 6mm'};
+          padding: ${isA4 ? '5mm 8mm 6mm 8mm' : '3mm 5mm 4mm 5mm'};
           background: #ffffff;
-          box-shadow: 0 0 5px rgba(0, 0, 0, 0.08);
+          border: 1px solid #e2e8f0;
+          border-radius: 4px;
+          box-shadow: none;
           display: flex;
           flex-direction: column;
-          font-family: Arial, Helvetica, sans-serif;
+          font-family: Arial, Helvetica, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
           color: #000000;
           box-sizing: border-box;
           -webkit-print-color-adjust: exact;
@@ -138,7 +140,7 @@ export function SalesInvoiceDocument({
           justify-content: space-between;
           width: 100%;
           margin-top: 0;
-          margin-bottom: 2px;
+          margin-bottom: 3px;
           min-height: 24px;
         }
 
@@ -179,7 +181,7 @@ export function SalesInvoiceDocument({
         }
 
         .invoice-subtitle {
-          font-size: 9px;
+          font-size: 9.5px;
           font-weight: 900;
           color: #000000;
           letter-spacing: 0.6px;
@@ -190,68 +192,106 @@ export function SalesInvoiceDocument({
 
         /* GRAY OUTLINE BUSINESS BANNER */
         .business-banner {
-          border: 1px solid #777777;
+          border: 1px solid #888888;
           background: #fafafa;
           color: #000000;
           border-radius: 3px;
           padding: 4px 6px;
-          display: grid;
-          grid-template-columns: 1.2fr 1fr 1fr;
-          row-gap: 2px;
-          column-gap: 6px;
           margin-top: 3px;
         }
 
+        .banner-row {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 6px;
+          width: 100%;
+        }
+
+        .banner-box {
+          display: flex;
+          flex-direction: column;
+        }
+
+        .banner-box.w-business { width: 40%; }
+        .banner-box.w-address { width: 58%; }
+        .banner-box.w-phone { width: 30%; }
+        .banner-box.w-inv { width: 30%; }
+        .banner-box.w-datetime { width: 38%; }
+
         .banner-box .label {
-          font-size: 6px;
+          font-size: 6.5px;
           text-transform: uppercase;
           color: #555555;
           font-weight: 700;
+          line-height: 1.2;
           display: block;
+          margin-bottom: 1px;
         }
 
         .banner-box .value {
-          font-size: 8px;
+          font-size: 8.5px;
           font-weight: 700;
           color: #000000;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
+          line-height: 1.35;
+          word-break: break-word;
+          overflow: visible;
           display: block;
         }
 
         /* CUSTOMER & NTN CARDS */
         .customer-row {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: space-between;
           margin-top: 3px;
           padding: 2px 4px;
           row-gap: 2px;
-          column-gap: 6px;
+        }
+
+        .customer-col {
+          width: 48%;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .customer-col.full-width {
+          width: 100%;
         }
 
         .meta-label {
           font-size: 6.5px;
           color: #555555;
           font-weight: 600;
+          line-height: 1.2;
           display: block;
+          margin-bottom: 1px;
         }
 
         .meta-val {
-          font-size: 8px;
-          font-weight: 800;
+          font-size: 8.5px;
+          font-weight: 700;
           color: #000000;
+          line-height: 1.35;
+          word-break: break-word;
+          overflow: visible;
           display: block;
         }
 
         .ntn-card {
           border: 1px solid #aaaaaa;
           border-radius: 3px;
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          margin-top: 2px;
+          display: flex;
+          justify-content: space-between;
+          margin-top: 3px;
           padding: 3px 6px;
           background: #ffffff;
+        }
+
+        .ntn-col {
+          width: 48%;
+          display: flex;
+          flex-direction: column;
         }
 
         /* TABLE */
@@ -266,36 +306,51 @@ export function SalesInvoiceDocument({
         }
 
         .invoice-table thead th {
-          background: #eeeeee;
-          color: #000000;
-          font-size: 7px;
+          background: #e2e8f0;
+          color: #0f172a;
+          font-size: 8px;
           font-weight: 800;
-          padding: 3px 2px;
+          padding: 4px 2px;
+          line-height: 1.2;
           text-align: center;
-          border: 1px solid #888888;
+          border: 1px solid #94a3b8;
         }
 
         .invoice-table tbody td {
-          border: 1px solid #cccccc;
-          font-size: 7.5px;
-          padding: 3px 2px;
+          border: 1px solid #cbd5e1;
+          font-size: 8px;
+          padding: 3.5px 2px;
+          line-height: 1.25;
           text-align: center;
           color: #000000;
         }
 
-        .invoice-table tbody td.product { text-align: left; padding-left: 4px; font-weight: 700; }
-        .invoice-table tbody td.total { text-align: right; padding-right: 4px; font-weight: 700; }
+        .invoice-table tbody td.product {
+          text-align: left;
+          padding-left: 4px;
+          font-weight: 700;
+          font-size: 8.5px;
+          word-break: break-word;
+        }
+
+        .invoice-table tbody td.total {
+          text-align: right;
+          padding-right: 4px;
+          font-weight: 700;
+          font-size: 8.5px;
+        }
 
         /* SUMMARY SECTION */
         .summary-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 12px;
-          margin-top: 3px;
+          display: flex;
+          justify-content: space-between;
+          gap: 14px;
+          margin-top: 4px;
           padding-top: 3px;
         }
 
         .summary-col {
+          width: 48%;
           display: flex;
           flex-direction: column;
           gap: 2px;
@@ -304,7 +359,8 @@ export function SalesInvoiceDocument({
         .summary-row {
           display: flex;
           justify-content: space-between;
-          font-size: 7.5px;
+          font-size: 8px;
+          line-height: 1.3;
           color: #333333;
         }
 
@@ -319,7 +375,7 @@ export function SalesInvoiceDocument({
         }
 
         .summary-row.net-total {
-          font-size: 9.5px;
+          font-size: 10px;
           font-weight: 900;
           color: #000000;
           margin-top: 1px;
@@ -334,10 +390,10 @@ export function SalesInvoiceDocument({
           align-items: center;
           justify-content: space-between;
           border-top: 1px solid #999;
-          margin-top: 5px;
+          margin-top: 6px;
           padding-top: 4px;
-          font-size: 6.5px;
-          line-height: 1.2;
+          font-size: 7px;
+          line-height: 1.25;
           color: #444;
         }
 
@@ -350,15 +406,15 @@ export function SalesInvoiceDocument({
           text-align: right;
           direction: rtl;
           white-space: nowrap;
-          font-family: Arial, "Noto Naskh Arabic", sans-serif;
-          font-size: 7px;
-          line-height: 1.35;
+          font-family: Arial, "Noto Naskh Arabic", "Segoe UI", Tahoma, sans-serif;
+          font-size: 7.5px;
+          line-height: 1.4;
           font-weight: 700;
           color: #222;
           display: flex;
           flex-direction: column;
-          align-items: flex-start;
-          gap: 1.5px;
+          align-items: flex-end;
+          gap: 1px;
         }
 
         .footer-right > div {
@@ -405,10 +461,11 @@ export function SalesInvoiceDocument({
             min-height: auto !important;
             height: auto !important;
             margin: 0 auto !important;
-            padding: ${isA4 ? '4mm 8mm 6mm 8mm' : '2mm 6mm 3mm 6mm'} !important;
+            padding: ${isA4 ? '4mm 8mm 6mm 8mm' : '2mm 5mm 3mm 5mm'} !important;
             box-shadow: none !important;
             border: none !important;
             page-break-after: auto !important;
+            page-break-inside: avoid !important;
           }
 
           .invoice-table {
@@ -420,8 +477,8 @@ export function SalesInvoiceDocument({
           }
 
           .invoice-table thead th {
-            padding: 2px 2px !important;
-            font-size: 7px !important;
+            padding: 2.5px 2px !important;
+            font-size: 7.5px !important;
           }
 
           .invoice-table tbody tr {
@@ -430,9 +487,9 @@ export function SalesInvoiceDocument({
           }
 
           .invoice-table tbody td {
-            padding: 2px 2px !important;
-            font-size: 7px !important;
-            line-height: 1.15 !important;
+            padding: 2.5px 2px !important;
+            font-size: 7.5px !important;
+            line-height: 1.2 !important;
           }
 
           .brand-header {
@@ -442,7 +499,7 @@ export function SalesInvoiceDocument({
 
           .business-banner {
             margin-top: 2px !important;
-            padding: 2px 5px !important;
+            padding: 3px 5px !important;
           }
 
           .customer-row {
@@ -456,7 +513,7 @@ export function SalesInvoiceDocument({
           .summary-grid {
             margin-top: 2px !important;
             padding-top: 2px !important;
-            gap: 8px !important;
+            gap: 10px !important;
           }
 
           .receipt-footer {
@@ -495,48 +552,52 @@ export function SalesInvoiceDocument({
 
           {/* INK-SAVER GRAY BUSINESS BANNER */}
           <section className="business-banner">
-            <div className="banner-box">
-              <span className="label">Business</span>
-              <span className="value">{storeName || 'SAEED AND CO'}</span>
+            <div className="banner-row">
+              <div className="banner-box w-business">
+                <span className="label">Business</span>
+                <span className="value">{storeName || 'SAEED AND CO'}</span>
+              </div>
+              <div className="banner-box w-address">
+                <span className="label">Address</span>
+                <span className="value">{address || '—'}</span>
+              </div>
             </div>
-            <div className="banner-box" style={{ gridColumn: 'span 2' }}>
-              <span className="label">Address</span>
-              <span className="value">{address || '—'}</span>
-            </div>
-            <div className="banner-box">
-              <span className="label">Phone</span>
-              <span className="value">{phone || '—'}</span>
-            </div>
-            <div className="banner-box">
-              <span className="label">Invoice #</span>
-              <span className="value">{invoiceNumber}</span>
-            </div>
-            <div className="banner-box">
-              <span className="label">Date & Time</span>
-              <span className="value">{displayDateTime}</span>
+            <div className="banner-row" style={{ marginTop: '3px' }}>
+              <div className="banner-box w-phone">
+                <span className="label">Phone</span>
+                <span className="value">{phone || '—'}</span>
+              </div>
+              <div className="banner-box w-inv">
+                <span className="label">Invoice #</span>
+                <span className="value">{invoiceNumber}</span>
+              </div>
+              <div className="banner-box w-datetime">
+                <span className="label">Date & Time</span>
+                <span className="value">{displayDateTime}</span>
+              </div>
             </div>
           </section>
 
           {/* CUSTOMER DETAILS */}
           <section className="customer-row">
-            <div>
+            <div className="customer-col">
               <span className="meta-label">Customer</span>
               <span className="meta-val">{customerName || 'Walk-in'}</span>
             </div>
-            <div>
+            <div className="customer-col">
               <span className="meta-label">Order #</span>
               <span className="meta-val">{orderNumber || '—'}</span>
             </div>
-            <div>
+            <div className="customer-col">
               <span className="meta-label">Customer Number</span>
               <span className="meta-val">{customerPhone?.trim() || '—'}</span>
             </div>
-            <div>
+            <div className="customer-col">
               <span className="meta-label">Customer Area</span>
               <span className="meta-val">{customerArea?.trim() || '—'}</span>
             </div>
             {customerAddress?.trim() && (
-              <div style={{ gridColumn: 'span 2' }}>
+              <div className="customer-col full-width" style={{ marginTop: '2px' }}>
                 <span className="meta-label">Customer Address</span>
                 <span className="meta-val">{customerAddress.trim()}</span>
               </div>
@@ -545,11 +606,11 @@ export function SalesInvoiceDocument({
 
           {/* NTN CARD */}
           <section className="ntn-card">
-            <div>
+            <div className="ntn-col">
               <span className="meta-label">BUSINESS NTN</span>
               <span className="meta-val">{ntn?.trim() || '—'}</span>
             </div>
-            <div>
+            <div className="ntn-col">
               <span className="meta-label">CUSTOMER NTN</span>
               <span className="meta-val">{customerNtn?.trim() || '—'}</span>
             </div>

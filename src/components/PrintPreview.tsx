@@ -28,7 +28,7 @@ export function PrintPreview({
   onClose,
   title = 'Print Preview',
   children,
-  size = 'lg',
+  size = 'xl',
   fileName = 'document.pdf',
   saveOnOpen = false,
   onSaved,
@@ -105,8 +105,8 @@ export function PrintPreview({
       <div
         id="print-preview-content"
         className={cn(
-          "print-document max-h-[70vh] overflow-y-auto rounded-lg border border-slate-200 bg-white print:max-h-none print:overflow-visible print:border-0 print:p-0",
-          halfPage ? "p-1.5 sm:p-2 half-page-print" : "p-4"
+          "print-document max-h-[72vh] overflow-y-auto rounded-xl border border-slate-200/80 bg-slate-100/60 p-2 sm:p-4 flex justify-center print:max-h-none print:overflow-visible print:border-0 print:p-0 print:bg-transparent",
+          halfPage ? "half-page-print" : ""
         )}
       >
         {children}

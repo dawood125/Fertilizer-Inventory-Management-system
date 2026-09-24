@@ -14,12 +14,12 @@ interface ModalProps {
 }
 
 const sizeClasses = {
-  sm: 'max-w-md',
-  md: 'max-w-lg',
-  lg: 'max-w-2xl',
-  xl: 'max-w-4xl',
-  '2xl': 'max-w-6xl',
-  full: 'max-w-[95vw]',
+  sm: 'max-w-lg',
+  md: 'max-w-2xl',
+  lg: 'max-w-4xl',
+  xl: 'max-w-5xl',
+  '2xl': 'max-w-7xl',
+  full: 'max-w-[96vw]',
 };
 
 export function Modal({ open, onClose, title, children, size = 'md', footer, bodyClassName, className }: ModalProps) {
@@ -35,26 +35,26 @@ export function Modal({ open, onClose, title, children, size = 'md', footer, bod
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 backdrop-blur-sm p-3 sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/50 backdrop-blur-sm p-2.5 sm:p-4">
       <div
         className={cn(
-          'relative w-full rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 my-4 sm:my-6 animate-[modalIn_0.2s_ease-out]',
+          'relative w-full rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 my-auto animate-[modalIn_0.2s_ease-out] flex flex-col max-h-[92vh]',
           sizeClasses[size],
           className
         )}
       >
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-          <h2 className="text-lg font-semibold text-slate-800">{title}</h2>
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 sm:px-6 py-3 shrink-0">
+          <h2 className="text-base sm:text-lg font-semibold text-slate-800">{title}</h2>
           <button
             onClick={onClose}
             className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
           >
-            <X size={20} />
+            <X size={19} />
           </button>
         </div>
-        <div className={cn('px-6 py-5 max-h-[calc(100vh-9rem)] overflow-y-auto', bodyClassName)}>{children}</div>
+        <div className={cn('px-5 sm:px-6 py-3.5 overflow-y-auto flex-1', bodyClassName)}>{children}</div>
         {footer && (
-          <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-6 py-4">
+          <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-5 sm:px-6 py-3 shrink-0 bg-slate-50/50 rounded-b-2xl">
             {footer}
           </div>
         )}

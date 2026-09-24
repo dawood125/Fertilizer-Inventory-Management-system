@@ -423,7 +423,7 @@ export function Customers() {
         danger
       />
 
-      <Modal open={!!viewing} onClose={() => setViewing(null)} title="Customer Profile" size="lg">
+      <Modal open={!!viewing} onClose={() => setViewing(null)} title="Customer Profile" size="xl">
         {viewing && (
           <div>
             <div className="mb-5 flex items-start gap-4">

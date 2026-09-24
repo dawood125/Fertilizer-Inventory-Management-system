@@ -256,8 +256,8 @@ export function Orders() {
       <Modal
         open={!!viewOrder && !printPreview}
         onClose={() => setViewOrder(null)}
-        title={viewOrder ? `Order ${viewOrder.order_number}` : ''}
-        size="lg"
+        title={viewOrder ? `Order #${viewOrder.order_number}` : ''}
+        size="xl"
         footer={
           <>
             <Button
@@ -277,60 +277,78 @@ export function Orders() {
         }
       >
         {viewOrder && (
-          <div>
-            <div className="mb-4 grid grid-cols-2 gap-4 text-sm">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-2 text-xs">
               <div>
-                <p className="text-xs text-slate-400">Customer</p>
-                <p className="font-medium text-slate-700">{viewOrder.customers?.name || 'Walk-in'}</p>
+                <span className="text-slate-400">Customer: </span>
+                <span className="font-semibold text-slate-800">{viewOrder.customers?.name || 'Walk-in Customer'}</span>
+                {viewOrder.customers?.phone && <span className="text-slate-500 ml-1">({viewOrder.customers.phone})</span>}
               </div>
               <div>
-                <p className="text-xs text-slate-400">Date</p>
-                <p className="font-medium text-slate-700">{formatDateTime(viewOrder.created_at)}</p>
+                <span className="text-slate-400">Date & Time: </span>
+                <span className="font-semibold text-slate-800">{formatDateTime(viewOrder.created_at)}</span>
               </div>
             </div>
-            <table className="data-table">
-              <thead>
-                <tr><th>Product</th><th>Batch #</th><th>Qty</th><th>Unit</th><th>Rate</th><th className="text-right">Total</th></tr>
-              </thead>
-              <tbody>
-                {viewOrder.items?.map((it: any) => (
-                  <tr key={it.id}>
-                    <td>{it.product_name}</td>
-                    <td className="font-mono text-xs">{it.batch_number || '—'}</td>
-                    <td>{it.quantity}</td>
-                    <td className="capitalize">{it.unit || 'piece'}</td>
-                    <td>{formatCurrency(it.unit_price, symbol)}</td>
-                    <td className="text-right font-medium">{formatCurrency(it.total, symbol)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="mt-4 space-y-1 text-sm">
-              <div className="flex justify-between text-slate-500"><span>Subtotal</span><span>{formatCurrency(viewOrder.subtotal, symbol)}</span></div>
-              {Number(viewOrder.discount) > 0 && <div className="flex justify-between text-rose-500"><span>Discount</span><span>- {formatCurrency(viewOrder.discount, symbol)}</span></div>}
-              {Number(viewOrder.tax) > 0 && <div className="flex justify-between text-slate-500"><span>Tax</span><span>{formatCurrency(viewOrder.tax, symbol)}</span></div>}
-              <div className="flex justify-between border-t border-slate-200 pt-1.5 text-base font-bold text-slate-800"><span>Total</span><span>{formatCurrency(viewOrder.total, symbol)}</span></div>
-              <div className="flex justify-between text-slate-500"><span>Paid</span><span>{formatCurrency(viewOrder.paid_amount, symbol)}</span></div>
-            </div>
-            {viewOrder.payments?.length > 0 && (
-              <div className="mt-4">
-                <p className="mb-2 text-xs font-semibold uppercase text-slate-400">Payment History & Timestamps</p>
-                <div className="space-y-1.5">
-                  {viewOrder.payments.map((p: OrderPayment) => (
-                    <div key={p.id} className="flex items-center justify-between rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-sm">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold capitalize text-slate-700">{p.method}</span>
-                          {p.note && <span className="text-xs text-slate-400">({p.note})</span>}
-                        </div>
-                        <p className="text-[11px] text-slate-400">{formatDateTime(p.created_at)}</p>
-                      </div>
-                      <span className="font-bold text-emerald-600">+{formatCurrency(p.amount, symbol)}</span>
-                    </div>
+
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="data-table text-xs">
+                <thead>
+                  <tr><th>Product</th><th>Batch #</th><th>Qty</th><th>Unit</th><th>Rate</th><th className="text-right">Total</th></tr>
+                </thead>
+                <tbody>
+                  {viewOrder.items?.map((it: any) => (
+                    <tr key={it.id}>
+                      <td className="font-medium text-slate-800">{it.product_name}</td>
+                      <td className="font-mono text-[11px] text-slate-600">{it.batch_number || '—'}</td>
+                      <td>{it.quantity}</td>
+                      <td className="capitalize">{it.unit || 'piece'}</td>
+                      <td>{formatCurrency(it.unit_price, symbol)}</td>
+                      <td className="text-right font-medium">{formatCurrency(it.total, symbol)}</td>
+                    </tr>
                   ))}
-                </div>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 items-start pt-1">
+              {/* Left Column: Payment History */}
+              <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Payment History & Timestamps</p>
+                {viewOrder.payments?.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {viewOrder.payments.map((p: OrderPayment) => (
+                      <div key={p.id} className="flex items-center justify-between rounded-lg bg-white border border-slate-200/80 px-3 py-1.5 text-xs">
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold capitalize text-slate-700">{p.method}</span>
+                            {p.note && <span className="text-[11px] text-slate-400">({p.note})</span>}
+                          </div>
+                          <p className="text-[10px] text-slate-400">{formatDateTime(p.created_at)}</p>
+                        </div>
+                        <span className="font-bold text-emerald-600">+{formatCurrency(p.amount, symbol)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 italic">No payment recorded</p>
+                )}
               </div>
-            )}
+
+              {/* Right Column: Order Totals Summary */}
+              <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 space-y-1.5 text-xs">
+                <div className="flex justify-between text-slate-500"><span>Subtotal</span><span className="font-medium text-slate-700">{formatCurrency(viewOrder.subtotal, symbol)}</span></div>
+                {Number(viewOrder.discount) > 0 && <div className="flex justify-between text-rose-500"><span>Discount</span><span className="font-medium">- {formatCurrency(viewOrder.discount, symbol)}</span></div>}
+                {Number(viewOrder.tax) > 0 && <div className="flex justify-between text-slate-500"><span>Tax</span><span className="font-medium text-slate-700">{formatCurrency(viewOrder.tax, symbol)}</span></div>}
+                <div className="flex justify-between border-t border-slate-200 pt-1.5 text-sm font-bold text-slate-900"><span>Total</span><span>{formatCurrency(viewOrder.total, symbol)}</span></div>
+                <div className="flex justify-between text-slate-600"><span>Paid Amount</span><span className="font-semibold text-emerald-600">{formatCurrency(viewOrder.paid_amount, symbol)}</span></div>
+                {Number(viewOrder.total) - Number(viewOrder.paid_amount) > 0 && (
+                  <div className="flex justify-between text-rose-600 font-bold border-t border-slate-200/60 pt-1">
+                    <span>Outstanding Due</span>
+                    <span>{formatCurrency(Number(viewOrder.total) - Number(viewOrder.paid_amount), symbol)}</span>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </Modal>

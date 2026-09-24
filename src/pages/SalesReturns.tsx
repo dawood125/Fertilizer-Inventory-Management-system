@@ -572,7 +572,7 @@ export function SalesReturns() {
         open={!!viewing}
         onClose={() => setViewing(null)}
         title={viewing ? `Sales Return ${viewing.return_number}` : ''}
-        size="md"
+        size="xl"
         footer={
           <>
             {viewing?.status === 'pending' && (

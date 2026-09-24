@@ -279,7 +279,7 @@ export function PurchaseOrders() {
         open={!!viewOrder && !printPreview}
         onClose={() => setViewOrder(null)}
         title={viewOrder ? `PO ${viewOrder.po_number}` : ''}
-        size="lg"
+        size="xl"
         footer={
           <>
             <Button variant="outline" icon={<Printer size={16} />} onClick={() => setPrintPreview(true)}>Print Preview</Button>
@@ -326,11 +326,13 @@ export function PurchaseOrders() {
                 ))}
               </tbody>
             </table>
-            <div className="mt-4 space-y-1 text-sm">
-              <div className="flex justify-between text-slate-500"><span>Subtotal</span><span>{formatCurrency(viewOrder.subtotal, symbol)}</span></div>
-              {Number(viewOrder.tax) > 0 && <div className="flex justify-between text-slate-500"><span>Tax</span><span>{formatCurrency(viewOrder.tax, symbol)}</span></div>}
-              <div className="flex justify-between border-t border-slate-200 pt-1.5 text-base font-bold text-slate-800"><span>Total</span><span>{formatCurrency(viewOrder.total, symbol)}</span></div>
-              <div className="flex justify-between text-slate-500"><span>Paid</span><span>{formatCurrency(viewOrder.paid_amount, symbol)}</span></div>
+            <div className="mt-3 flex justify-end">
+              <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-slate-50/80 p-3 space-y-1.5 text-xs">
+                <div className="flex justify-between text-slate-500"><span>Subtotal</span><span className="font-medium text-slate-700">{formatCurrency(viewOrder.subtotal, symbol)}</span></div>
+                {Number(viewOrder.tax) > 0 && <div className="flex justify-between text-slate-500"><span>Tax</span><span className="font-medium text-slate-700">{formatCurrency(viewOrder.tax, symbol)}</span></div>}
+                <div className="flex justify-between border-t border-slate-200 pt-1 text-sm font-bold text-slate-900"><span>Total</span><span>{formatCurrency(viewOrder.total, symbol)}</span></div>
+                <div className="flex justify-between text-slate-600"><span>Paid</span><span className="font-semibold text-emerald-600">{formatCurrency(viewOrder.paid_amount, symbol)}</span></div>
+              </div>
             </div>
             {viewOrder.status === 'pending' && (
               <Button
