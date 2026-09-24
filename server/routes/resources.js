@@ -317,6 +317,18 @@ export function createResourceRouter() {
       data.date = now.slice(0, 10);
     }
 
+    // Rapid duplicate order submission safeguard (rejects double-submission within 3 seconds)
+    if (key === 'orders' && !restore) {
+      const threeSecAgo = new Date(Date.now() - 3000).toISOString();
+      const duplicate = queryOne(
+        `SELECT * FROM orders WHERE (customer_id = ? OR (customer_id IS NULL AND ? IS NULL)) AND total = ? AND created_at >= ? LIMIT 1`,
+        [data.customer_id || null, data.customer_id || null, data.total, threeSecAgo]
+      );
+      if (duplicate) {
+        return res.status(200).json(mapRow(key, duplicate));
+      }
+    }
+
     const noCreatedAt = ['order_items', 'purchase_items', 'delivery_items'].includes(table);
     const hasUpdated = !['stock_movements', 'order_items', 'order_payments', 'purchase_items', 'delivery_items', 'transactions', 'audit_logs'].includes(table);
 

@@ -53,6 +53,8 @@ export function PurchaseOrders() {
   const [dateFilter, setDateFilter] = useState<DateFilterValue>({ preset: 'all' });
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [receivingId, setReceivingId] = useState<string | null>(null);
+  const receivingRef = useRef<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -92,6 +94,9 @@ export function PurchaseOrders() {
   };
 
   const receivePO = async (po: any) => {
+    if (!po?.id || receivingRef.current.has(po.id)) return;
+    receivingRef.current.add(po.id);
+    setReceivingId(po.id);
     try {
       let items = po.items || [];
       if (!items.length) {
@@ -170,6 +175,9 @@ export function PurchaseOrders() {
       load();
     } catch (e: any) {
       notify(e.message || 'Failed to receive PO', 'error');
+    } finally {
+      if (po?.id) receivingRef.current.delete(po.id);
+      setReceivingId(null);
     }
   };
 
@@ -234,7 +242,17 @@ export function PurchaseOrders() {
                       <td>
                         <div className="flex justify-end gap-1">
                           <button onClick={() => openView(o)} className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"><Eye size={16} /></button>
-                          {o.status === 'pending' && <Button size="sm" variant="success" icon={<CheckCircle2 size={14} />} onClick={() => receivePO(o)}>Receive</Button>}
+                          {o.status === 'pending' && (
+                            <Button
+                              size="sm"
+                              variant="success"
+                              icon={receivingId === o.id ? <Spinner size="sm" /> : <CheckCircle2 size={14} />}
+                              onClick={() => receivePO(o)}
+                              disabled={receivingId === o.id}
+                            >
+                              {receivingId === o.id ? 'Receiving...' : 'Receive'}
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -314,7 +332,20 @@ export function PurchaseOrders() {
               <div className="flex justify-between border-t border-slate-200 pt-1.5 text-base font-bold text-slate-800"><span>Total</span><span>{formatCurrency(viewOrder.total, symbol)}</span></div>
               <div className="flex justify-between text-slate-500"><span>Paid</span><span>{formatCurrency(viewOrder.paid_amount, symbol)}</span></div>
             </div>
-            {viewOrder.status === 'pending' && <Button className="mt-4 w-full" variant="success" icon={<CheckCircle2 size={18} />} onClick={() => { receivePO(viewOrder); setViewOrder(null); }}>Mark as Received & Update Stock</Button>}
+            {viewOrder.status === 'pending' && (
+              <Button
+                className="mt-4 w-full"
+                variant="success"
+                icon={receivingId === viewOrder.id ? <Spinner size="sm" /> : <CheckCircle2 size={18} />}
+                onClick={async () => {
+                  await receivePO(viewOrder);
+                  setViewOrder(null);
+                }}
+                disabled={receivingId === viewOrder.id}
+              >
+                {receivingId === viewOrder.id ? 'Receiving & Updating Stock...' : 'Mark as Received & Update Stock'}
+              </Button>
+            )}
           </div>
         )}
       </Modal>
@@ -398,6 +429,8 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
   }
 
   const [lines, setLines] = useState<POLine[]>([]);
+  const [savingPO, setSavingPO] = useState(false);
+  const savingPORef = useRef(false);
   const [productQuery, setProductQuery] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
   const [showCsvModal, setShowCsvModal] = useState(false);
@@ -554,7 +587,10 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
   }).slice(0, 15);
 
   const save = async () => {
+    if (savingPORef.current) return;
     if (lines.length === 0) { notify('Add at least one product to the purchase order', 'error'); return; }
+    savingPORef.current = true;
+    setSavingPO(true);
     try {
       const poNumber = generateDocNumber('PO');
       const po = await api.post<any>('/api/data/purchase_orders', {
@@ -580,6 +616,9 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
       onClose(); onCreated();
     } catch {
       notify('Failed to create PO', 'error');
+    } finally {
+      savingPORef.current = false;
+      setSavingPO(false);
     }
   };
 
@@ -607,8 +646,8 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
             <Button variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button onClick={save} disabled={lines.length === 0}>
-              Create PO — {formatCurrency(total, symbol)}
+            <Button onClick={save} disabled={lines.length === 0 || savingPO}>
+              {savingPO ? 'Creating PO...' : `Create PO — ${formatCurrency(total, symbol)}`}
             </Button>
           </div>
         </div>

@@ -3,7 +3,7 @@ import {
   LayoutDashboard, ShoppingCart, Package, Truck, Receipt, Wallet,
   Settings as SettingsIcon, Menu, X, Store, ChevronDown,
   Building2, ClipboardList, Banknote, Users,
-  RotateCcw, FileBarChart, Boxes, Layers, Cookie, LogOut, ShieldCheck,
+  RotateCcw, FileBarChart, Boxes, Layers, Sprout, LogOut, ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSettings } from '@/context/SettingsContext';
@@ -34,7 +34,7 @@ const navSections: NavSection[] = [
       { label: 'Companies', path: '/companies', icon: <Building2 size={19} /> },
       { label: 'Brands', path: '/brands', icon: <Layers size={19} /> },
       { label: 'Categories', path: '/categories', icon: <Boxes size={19} /> },
-      { label: 'Products', path: '/products', icon: <Cookie size={19} /> },
+      { label: 'Products', path: '/products', icon: <Package size={19} /> },
     ],
   },
   {
@@ -115,8 +115,8 @@ export function AppShell({
           {logoSrc ? (
             <img src={logoSrc} alt="Logo" className="h-9 w-9 rounded-xl object-cover" />
           ) : (
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-md shadow-orange-600/30">
-              <Cookie size={20} />
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 text-white shadow-md shadow-emerald-700/30">
+              <Sprout size={20} />
             </div>
           )}
           <div className="min-w-0">
@@ -181,8 +181,8 @@ export function AppShell({
               {logoSrc ? (
                 <img src={logoSrc} alt="" className="h-8 w-8 shrink-0 rounded-lg object-cover" />
               ) : (
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 text-white">
-                  <Cookie size={16} />
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-600 to-teal-700 text-white shadow-sm shadow-emerald-700/20">
+                  <Sprout size={16} />
                 </div>
               )}
               <div className="min-w-0">

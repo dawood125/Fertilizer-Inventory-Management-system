@@ -95,6 +95,8 @@ export function POS({ navigate: _navigate }: { navigate: (path: string) => void 
   const pdfActionRef = useRef<'save' | 'whatsapp' | null>(null);
   pdfActionRef.current = pdfAction;
   const [showAddCustomer, setShowAddCustomer] = useState(false);
+  const [submittingOrder, setSubmittingOrder] = useState(false);
+  const isSubmittingOrderRef = useRef(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const handlePdfSaved = useCallback((result: 'saved' | 'cancelled' | 'printed' | 'error') => {
@@ -487,11 +489,15 @@ export function POS({ navigate: _navigate }: { navigate: (path: string) => void 
   };
 
   const completeOrder = async () => {
+    if (isSubmittingOrderRef.current) return;
     if (cart.length === 0) { notify('Cart is empty', 'error'); return; }
     if (paymentType === 'credit' && creditExceeded) {
       notify(`Credit limit exceeded! Limit: ${formatCurrency(selectedCustomer!.credit_limit, symbol)}`, 'error');
       return;
     }
+
+    isSubmittingOrderRef.current = true;
+    setSubmittingOrder(true);
 
     const orderNumber = generateDocNumber('ORD');
     const invoiceNumber = generateDocNumber('INV');
@@ -614,6 +620,9 @@ export function POS({ navigate: _navigate }: { navigate: (path: string) => void 
       loadData();
     } catch {
       notify('Failed to create order', 'error');
+    } finally {
+      isSubmittingOrderRef.current = false;
+      setSubmittingOrder(false);
     }
   };
 
@@ -1109,8 +1118,14 @@ export function POS({ navigate: _navigate }: { navigate: (path: string) => void 
                   {creditExceeded && <p className="mt-0.5 font-bold text-rose-600">Credit limit exceeded!</p>}
                 </div>
 
-                <Button className="w-full shadow-md mt-1" size="lg" icon={<CheckCircle2 size={18} />} onClick={completeOrder}>
-                  Save & Complete — {formatCurrency(total, symbol)}
+                <Button
+                  className="w-full shadow-md mt-1"
+                  size="lg"
+                  icon={submittingOrder ? <Spinner size="sm" /> : <CheckCircle2 size={18} />}
+                  onClick={completeOrder}
+                  disabled={submittingOrder || cart.length === 0}
+                >
+                  {submittingOrder ? 'Processing Order...' : `Save & Complete — ${formatCurrency(total, symbol)}`}
                 </Button>
               </div>
             )}
