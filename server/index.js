@@ -83,10 +83,10 @@ export async function startServer(options = {}) {
   return { app, port, server };
 }
 
-// Allow running server standalone for browser dev
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+// Auto-start server in standalone Node / PM2 environments (Electron starts it programmatically)
+if (!process.versions.electron) {
   startServer().catch((err) => {
-    console.error('Failed to start server:', err);
+    console.error('[server] Failed to start server:', err);
     process.exit(1);
   });
 }
