@@ -62,10 +62,10 @@
     @apply w-full text-sm;
   }
   .data-table thead th {
-    @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 bg-slate-50 border-b border-slate-200;
+    @apply px-2.5 sm:px-4 py-2 sm:py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 bg-slate-50 border-b border-slate-200;
   }
   .data-table tbody td {
-    @apply px-4 py-3 border-b border-slate-100 text-slate-700;
+    @apply px-2.5 sm:px-4 py-2 sm:py-3 border-b border-slate-100 text-slate-700 text-xs sm:text-sm;
   }
   .data-table tbody tr {
     @apply transition hover:bg-slate-50;

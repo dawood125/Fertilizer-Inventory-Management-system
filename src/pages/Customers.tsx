@@ -426,20 +426,25 @@ export function Customers() {
       <Modal open={!!viewing} onClose={() => setViewing(null)} title="Customer Profile" size="xl">
         {viewing && (
           <div>
-            <div className="mb-5 flex items-start gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-100 text-sky-700"><Users size={28} /></div>
-              <div className="flex-1">
-                <h3 className="text-lg font-bold text-slate-800">{viewing.customer.name}</h3>
-                <div className="mt-1 flex flex-wrap gap-3 text-sm text-slate-500">
-                  <Badge variant="blue">{viewing.customer.type === 'retailer' ? 'Retailer' : viewing.customer.type}</Badge>
-                  {viewing.customer.owner_name && <span>{viewing.customer.owner_name}</span>}
-                  {viewing.customer.phone && <span className="flex items-center gap-1"><Phone size={13} />{viewing.customer.phone}</span>}
-                  {viewing.customer.email && <span className="flex items-center gap-1"><Mail size={13} />{viewing.customer.email}</span>}
-                  {viewing.customer.area && <span className="flex items-center gap-1"><MapPin size={13} />{viewing.customer.area}</span>}
+            <div className="mb-4 flex flex-col sm:flex-row items-start justify-between gap-3.5">
+              <div className="flex items-start gap-3.5 flex-1 min-w-0">
+                <div className="flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
+                  <Users size={24} className="sm:hidden" />
+                  <Users size={28} className="hidden sm:block" />
                 </div>
-                {viewing.customer.address && <p className="mt-1 text-sm text-slate-500">{viewing.customer.address}</p>}
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-lg font-bold text-slate-800 break-words">{viewing.customer.name}</h3>
+                  <div className="mt-1 flex flex-wrap gap-2 sm:gap-3 text-xs sm:text-sm text-slate-500">
+                    <Badge variant="blue">{viewing.customer.type === 'retailer' ? 'Retailer' : viewing.customer.type}</Badge>
+                    {viewing.customer.owner_name && <span>{viewing.customer.owner_name}</span>}
+                    {viewing.customer.phone && <span className="flex items-center gap-1"><Phone size={13} />{viewing.customer.phone}</span>}
+                    {viewing.customer.email && <span className="flex items-center gap-1"><Mail size={13} />{viewing.customer.email}</span>}
+                    {viewing.customer.area && <span className="flex items-center gap-1"><MapPin size={13} />{viewing.customer.area}</span>}
+                  </div>
+                  {viewing.customer.address && <p className="mt-1 text-xs sm:text-sm text-slate-500">{viewing.customer.address}</p>}
+                </div>
               </div>
-              <div className="text-right">
+              <div className="w-full sm:w-auto text-left sm:text-right bg-slate-50 sm:bg-transparent p-3 sm:p-0 rounded-xl sm:rounded-none border border-slate-100 sm:border-none">
                 <p className="text-xs text-slate-400">
                   {Number(viewing.customer.balance) < 0 ? 'Store Credit Available' : 'Outstanding Balance'}
                 </p>
@@ -489,13 +494,13 @@ export function Customers() {
                         <div className="border-t border-slate-100 pt-2 space-y-1">
                           <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Payment Installments ({pms.length})</p>
                           {pms.map((pm: any) => (
-                            <div key={pm.id} className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 px-2.5 py-1.5 rounded-lg">
-                              <div className="flex items-center gap-1.5">
+                            <div key={pm.id} className="flex flex-wrap items-center justify-between gap-1 text-xs text-slate-600 bg-slate-50 px-2.5 py-1.5 rounded-lg">
+                              <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                                 <span className="capitalize font-medium text-slate-700">{pm.method}</span>
                                 <span className="text-[11px] text-slate-400">· {formatDateTime(pm.created_at)}</span>
-                                {pm.note && <span className="text-[11px] text-slate-400">({pm.note})</span>}
+                                {pm.note && <span className="text-[11px] text-slate-400 truncate max-w-[180px]">({pm.note})</span>}
                               </div>
-                              <span className="font-semibold text-emerald-600">+{formatCurrency(pm.amount, symbol)}</span>
+                              <span className="font-semibold text-emerald-600 shrink-0">+{formatCurrency(pm.amount, symbol)}</span>
                             </div>
                           ))}
                         </div>
@@ -603,7 +608,7 @@ function CustomerForm({
       }
     >
       <div className="space-y-3.5">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Business / Customer Name" required>
             <Input
               value={form.name}
@@ -621,7 +626,7 @@ function CustomerForm({
           </Field>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Phone / Mobile">
             <Input
               value={form.phone}
@@ -638,7 +643,7 @@ function CustomerForm({
           </Field>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Area / Colony">
             <Input
               value={form.area}
@@ -664,7 +669,7 @@ function CustomerForm({
           />
         </Field>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Customer Type">
             <Select
               value={form.type}
@@ -700,12 +705,12 @@ function CustomerForm({
         {/* Previous Pending Balance (Opening Due) with clear explanation */}
         {!editing ? (
           <div className="rounded-xl border border-sky-200 bg-sky-50/70 p-3.5 space-y-1.5">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
               <span className="text-sm font-semibold text-sky-900">
                 Previous Pending Balance (Opening Due)
               </span>
               {Number(form.opening_balance || 0) > 0 && (
-                <span className="text-xs font-bold text-sky-700 bg-sky-100 px-2.5 py-0.5 rounded-full">
+                <span className="text-xs font-bold text-sky-700 bg-sky-100 px-2.5 py-0.5 rounded-full self-start sm:self-auto">
                   Initial Pending Invoice: {formatCurrency(Number(form.opening_balance || 0), symbol)}
                 </span>
               )}
@@ -722,7 +727,7 @@ function CustomerForm({
             />
           </div>
         ) : (
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 flex justify-between items-center">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 flex flex-col sm:flex-row gap-1 justify-between items-start sm:items-center">
             <span>Current Outstanding Balance: <strong>{formatCurrency(editing.balance || 0, symbol)}</strong></span>
             <span>Recorded Opening Balance: <strong>{formatCurrency(editing.opening_balance || 0, symbol)}</strong></span>
           </div>
@@ -733,7 +738,7 @@ function CustomerForm({
           <p className="mb-2 text-xs text-amber-700">
             Sets default price tier before a customer has specific purchase history.
           </p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Default Price Tier">
               <Select value={form.default_price_type} onChange={(e) => setForm({ ...form, default_price_type: e.target.value })}>
                 <option value="retail">Retail Price</option>
@@ -1063,7 +1068,7 @@ function CustomerCsvImportModal({
       title="Import Customers from CSV / Excel"
       size="xl"
       footer={
-        <div className="flex w-full items-center justify-between">
+        <div className="flex flex-col sm:flex-row w-full items-stretch sm:items-center justify-between gap-2.5">
           <div className="text-xs text-slate-500">
             {parsedRows.length > 0 ? (
               <span>
@@ -1074,12 +1079,13 @@ function CustomerCsvImportModal({
               <span>Select a CSV file to preview before importing</span>
             )}
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose} disabled={importing}>Cancel</Button>
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={onClose} disabled={importing}>Cancel</Button>
             <Button
+              size="sm"
               onClick={handleImport}
               disabled={validCount === 0 || importing}
-              icon={importing ? <RefreshCw size={16} className="animate-spin" /> : <Upload size={16} />}
+              icon={importing ? <RefreshCw size={15} className="animate-spin" /> : <Upload size={15} />}
             >
               {importing ? 'Importing...' : `Import ${validCount} Customer(s)`}
             </Button>

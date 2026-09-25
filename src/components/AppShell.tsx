@@ -244,7 +244,7 @@ export function AppShell({
           </div>
         </header>
 
-        <main className={cn('flex-1 overflow-y-auto p-4 lg:p-6', isPosMode && 'p-3 lg:p-4 xl:overflow-hidden')}>
+        <main className={cn('flex-1 overflow-y-auto p-2.5 sm:p-4 lg:p-6', isPosMode && 'p-2 sm:p-3 lg:p-4 xl:overflow-hidden')}>
           <div className={cn('animate-fadeIn', isPosMode ? 'mx-auto w-full max-w-none h-full' : 'mx-auto max-w-7xl')}>
             {children}
           </div>

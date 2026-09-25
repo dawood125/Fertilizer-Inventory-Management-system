@@ -176,7 +176,27 @@ export function Deliveries() {
         )}
       </Card>
       <DeliveryForm open={showForm} onClose={() => setShowForm(false)} onCreate={create} routes={routes} orders={orders} />
-      <Modal open={!!viewing} onClose={() => setViewing(null)} title={viewing ? `Challan ${viewing.challan_number}` : ''} size="lg" footer={<>{viewing?.status === 'pending' && <Button variant="success" onClick={() => markDelivered(viewing)}>Mark Delivered</Button>}<Button variant="outline" icon={<Printer size={16} />} onClick={() => void triggerSilentPrint()}>Print</Button><Button onClick={() => setViewing(null)}>Close</Button></>}>
+      <Modal
+        open={!!viewing}
+        onClose={() => setViewing(null)}
+        title={viewing ? `Challan ${viewing.challan_number}` : ''}
+        size="lg"
+        footer={
+          <div className="flex flex-wrap items-center justify-end gap-2 w-full">
+            {viewing?.status === 'pending' && (
+              <Button size="sm" variant="success" onClick={() => markDelivered(viewing)} className="flex-1 sm:flex-initial">
+                Mark Delivered
+              </Button>
+            )}
+            <Button size="sm" variant="outline" icon={<Printer size={15} />} onClick={() => void triggerSilentPrint()} className="flex-1 sm:flex-initial">
+              Print
+            </Button>
+            <Button size="sm" onClick={() => setViewing(null)} className="flex-1 sm:flex-initial">
+              Close
+            </Button>
+          </div>
+        }
+      >
         {viewing && (
           <div className="print-document">
             <div className="mb-4 hidden print:block">
@@ -187,15 +207,17 @@ export function Deliveries() {
               <div><p className="text-xs text-slate-400">Vehicle</p><p className="font-medium">{viewing.vehicle || '—'}</p></div>
               <div><p className="text-xs text-slate-400">Driver</p><p className="font-medium">{viewing.driver_name || '—'}</p></div>
             </div>
-            <table className="data-table">
-              <thead><tr><th>Product</th><th>Ordered</th><th>Delivered</th><th>Pending</th></tr></thead>
-              <tbody>
-                {(viewing.items || []).map((it: any) => (
-                  <tr key={it.id}><td className="font-medium">{it.product_name}</td><td>{it.ordered_quantity}</td><td>{it.delivered_quantity}</td><td className="text-rose-600">{it.pending_quantity}</td></tr>
-                ))}
-                {(!viewing.items || viewing.items.length === 0) && <tr><td colSpan={4} className="py-6 text-center text-slate-400">No items</td></tr>}
-              </tbody>
-            </table>
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="data-table text-xs">
+                <thead><tr><th>Product</th><th>Ordered</th><th>Delivered</th><th>Pending</th></tr></thead>
+                <tbody>
+                  {(viewing.items || []).map((it: any) => (
+                    <tr key={it.id}><td className="font-medium">{it.product_name}</td><td>{it.ordered_quantity}</td><td>{it.delivered_quantity}</td><td className="text-rose-600">{it.pending_quantity}</td></tr>
+                  ))}
+                  {(!viewing.items || viewing.items.length === 0) && <tr><td colSpan={4} className="py-6 text-center text-slate-400">No items</td></tr>}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </Modal>

@@ -293,39 +293,41 @@ export function PurchaseOrders() {
               <div><p className="text-xs text-slate-400">Supplier</p><p className="font-medium">{viewOrder.suppliers?.name || '—'}</p></div>
               <div><p className="text-xs text-slate-400">Date</p><p className="font-medium">{formatDateTime(viewOrder.created_at)}</p></div>
             </div>
-            <table className="data-table">
-              <thead><tr><th>Product</th><th>Batch #</th><th>Cartons</th><th>Pcs/Ctn</th><th>Total Pcs</th><th>Cost / Pc</th><th>Selling Rates</th><th className="text-right">Total</th></tr></thead>
-              <tbody>
-                {viewOrder.items?.map((it: any) => (
-                  <tr key={it.id}>
-                    <td className="font-medium text-slate-800">{it.product_name}</td>
-                    <td>
-                      {it.batch_number ? (
-                        <span className="font-mono text-xs font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
-                          {it.batch_number}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400">—</span>
-                      )}
-                    </td>
-                    <td>{it.cartons || (it.pieces_per_carton ? (it.quantity / it.pieces_per_carton).toFixed(1) : '—')}</td>
-                    <td>{it.pieces_per_carton || '—'}</td>
-                    <td className="font-semibold">{it.quantity}</td>
-                    <td>{formatCurrency(it.unit_cost, symbol)}</td>
-                    <td className="text-xs text-slate-600">
-                      {it.retail_price || it.wholesale_price || it.dealer_price ? (
-                        <span>
-                          Ret: {formatCurrency(it.retail_price, symbol)} | WS: {formatCurrency(it.wholesale_price, symbol)} | Dlr: {formatCurrency(it.dealer_price, symbol)}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400">—</span>
-                      )}
-                    </td>
-                    <td className="text-right font-medium">{formatCurrency(it.total, symbol)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="data-table text-xs">
+                <thead><tr><th>Product</th><th>Batch #</th><th>Cartons</th><th>Pcs/Ctn</th><th>Total Pcs</th><th>Cost / Pc</th><th>Selling Rates</th><th className="text-right">Total</th></tr></thead>
+                <tbody>
+                  {viewOrder.items?.map((it: any) => (
+                    <tr key={it.id}>
+                      <td className="font-medium text-slate-800">{it.product_name}</td>
+                      <td>
+                        {it.batch_number ? (
+                          <span className="font-mono text-xs font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+                            {it.batch_number}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td>{it.cartons || (it.pieces_per_carton ? (it.quantity / it.pieces_per_carton).toFixed(1) : '—')}</td>
+                      <td>{it.pieces_per_carton || '—'}</td>
+                      <td className="font-semibold">{it.quantity}</td>
+                      <td>{formatCurrency(it.unit_cost, symbol)}</td>
+                      <td className="text-xs text-slate-600">
+                        {it.retail_price || it.wholesale_price || it.dealer_price ? (
+                          <span>
+                            Ret: {formatCurrency(it.retail_price, symbol)} | WS: {formatCurrency(it.wholesale_price, symbol)} | Dlr: {formatCurrency(it.dealer_price, symbol)}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="text-right font-medium">{formatCurrency(it.total, symbol)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             <div className="mt-3 flex justify-end">
               <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-slate-50/80 p-3 space-y-1.5 text-xs">
                 <div className="flex justify-between text-slate-500"><span>Subtotal</span><span className="font-medium text-slate-700">{formatCurrency(viewOrder.subtotal, symbol)}</span></div>
@@ -630,26 +632,26 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
       onClose={onClose}
       title="Create Purchase Order"
       size="2xl"
-      bodyClassName="min-h-[460px]"
+      bodyClassName="min-h-0 sm:min-h-[440px]"
       footer={
-        <div className="flex w-full items-center justify-between">
+        <div className="flex flex-col sm:flex-row w-full items-start sm:items-center justify-between gap-2.5">
           <div className="text-xs text-slate-500">
             {lines.length > 0 ? (
               <span>
                 <strong className="text-slate-800">{lines.length}</strong> products (
-                <strong className="text-slate-800">{totalCartons}</strong> cartons /{' '}
-                <strong className="text-slate-800">{totalPieces}</strong> pieces)
+                <strong className="text-slate-800">{totalCartons}</strong> ctns /{' '}
+                <strong className="text-slate-800">{totalPieces}</strong> pcs)
               </span>
             ) : (
               <span>No products added</span>
             )}
           </div>
-          <div className="flex items-center gap-3">
-            <Button variant="outline" onClick={onClose}>
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <Button variant="outline" size="sm" onClick={onClose} className="flex-1 sm:flex-initial">
               Cancel
             </Button>
-            <Button onClick={save} disabled={lines.length === 0 || savingPO}>
-              {savingPO ? 'Creating PO...' : `Create PO — ${formatCurrency(total, symbol)}`}
+            <Button size="sm" onClick={save} disabled={lines.length === 0 || savingPO} className="flex-1 sm:flex-initial">
+              {savingPO ? 'Creating...' : `Create PO (${formatCurrency(total, symbol)})`}
             </Button>
           </div>
         </div>
@@ -841,7 +843,7 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
           </div>
         ) : (
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="max-h-80 overflow-y-auto">
+            <div className="max-h-80 overflow-auto">
               <table className="min-w-full divide-y divide-slate-200 text-sm">
                 <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-600">
                   <tr>

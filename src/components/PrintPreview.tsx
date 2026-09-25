@@ -82,34 +82,42 @@ export function PrintPreview({
       title={title}
       size={size}
       footer={
-        <>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+        <div className="flex items-center justify-end gap-2 w-full">
+          <Button variant="outline" size="sm" onClick={onClose} className="flex-1 sm:flex-initial text-xs sm:text-sm">
+            Cancel
+          </Button>
           <Button
             variant="outline"
-            icon={<FileDown size={16} />}
+            size="sm"
+            icon={<FileDown size={15} />}
             onClick={() => void handleSavePdf()}
             disabled={saving}
+            className="flex-1 sm:flex-initial text-xs sm:text-sm whitespace-nowrap"
           >
             {saving ? 'Saving…' : 'Save as PDF'}
           </Button>
           <Button
-            icon={<Printer size={16} />}
+            size="sm"
+            icon={<Printer size={15} />}
             onClick={() => void handleDirectPrint()}
             disabled={saving}
+            className="flex-1 sm:flex-initial text-xs sm:text-sm whitespace-nowrap"
           >
             {saving ? 'Printing…' : 'Print'}
           </Button>
-        </>
+        </div>
       }
     >
       <div
         id="print-preview-content"
         className={cn(
-          "print-document max-h-[72vh] overflow-y-auto rounded-xl border border-slate-200/80 bg-slate-100/60 p-2 sm:p-4 flex justify-center print:max-h-none print:overflow-visible print:border-0 print:p-0 print:bg-transparent",
+          "print-document max-h-[72vh] overflow-x-auto overflow-y-auto rounded-xl border border-slate-200/80 bg-slate-100/70 p-1.5 sm:p-4 print:max-h-none print:overflow-visible print:border-0 print:p-0 print:bg-transparent",
           halfPage ? "half-page-print" : ""
         )}
       >
-        {children}
+        <div className="min-w-fit w-full flex justify-start sm:justify-center">
+          {children}
+        </div>
       </div>
     </Modal>
   );

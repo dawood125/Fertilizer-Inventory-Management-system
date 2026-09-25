@@ -50,12 +50,12 @@ export function Card({
   return (
     <div className={cn('rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70', className)}>
       {(title || actions) && (
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 border-b border-slate-100 px-4 sm:px-5 py-3 sm:py-4">
           <div>
             {title && (typeof title === 'string' ? <h3 className="text-base font-semibold text-slate-800">{title}</h3> : title)}
             {subtitle && <p className="text-sm text-slate-500">{subtitle}</p>}
           </div>
-          {actions && <div className="flex items-center gap-2">{actions}</div>}
+          {actions && <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-start sm:justify-end">{actions}</div>}
         </div>
       )}
       {children}
@@ -107,10 +107,10 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mb-4 sm:mb-6 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-800">{title}</h1>
-        {subtitle && <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>}
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-800">{title}</h1>
+        {subtitle && <p className="mt-0.5 text-xs sm:text-sm text-slate-500">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>

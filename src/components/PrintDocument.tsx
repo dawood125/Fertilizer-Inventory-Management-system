@@ -27,7 +27,7 @@ export function PrintDocument({
   const effectiveLogo = logoSrc || defaultBusinessLogo;
 
   return (
-    <div className="text-left text-sm text-slate-800">
+    <div className="print-document text-left text-sm text-slate-800 bg-white p-3.5 sm:p-6 rounded-xl border border-slate-200/80 shadow-xs min-w-[580px] sm:min-w-[620px] md:min-w-0 max-w-4xl mx-auto box-border">
       <div className="mb-4 flex flex-col items-center border-b border-slate-200 pb-4 text-center sm:flex-row sm:justify-between sm:text-left">
         <div className="flex items-center gap-3">
           {effectiveLogo && (
@@ -84,7 +84,7 @@ export function PrintTh({
   return (
     <th
       className={cn(
-        'border-b-2 border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-semibold text-slate-700 uppercase tracking-wider',
+        'border-b-2 border-slate-200 bg-slate-50 px-2 sm:px-3 py-1.5 sm:py-2.5 text-xs font-semibold text-slate-700 uppercase tracking-wider',
         align === 'right' ? 'text-right' : 'text-left',
         className
       )}
@@ -109,7 +109,7 @@ export function PrintTd({
     <td
       colSpan={colSpan}
       className={cn(
-        'border-b border-slate-100 px-3 py-2.5 text-[13px] text-slate-700',
+        'border-b border-slate-100 px-2 sm:px-3 py-1.5 sm:py-2.5 text-xs sm:text-[13px] text-slate-700',
         align === 'right' ? 'text-right' : 'text-left',
         className
       )}
