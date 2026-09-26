@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { api, resolveImageUrl } from '@/lib/api';
 import type { Product, Category, Brand, Company } from '@/lib/types';
 import { useSettings } from '@/context/SettingsContext';
+import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/Toast';
 import { Button } from '@/components/Button';
 import { Field, Input, Select, Textarea } from '@/components/Form';
@@ -544,6 +545,8 @@ const initialFormState = {
 };
 
 function ProductForm({ open, onClose, onSave, editing, categories, brands, companies }: ProductFormProps) {
+  const { isAdmin, hasPermission } = useAuth();
+  const canEditPrices = isAdmin || hasPermission('edit_prices');
   const [form, setForm] = useState(initialFormState);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -615,13 +618,21 @@ function ProductForm({ open, onClose, onSave, editing, categories, brands, compa
   };
 
   const handleSubmit = () => {
-    onSave({
+    const payload = {
       ...form,
       unit: form.unit || 'piece',
       category_id: form.category_id || null,
       brand_id: form.brand_id || null,
       company_id: form.company_id || null,
-    });
+    };
+    if (!canEditPrices) {
+      payload.purchase_price = editing ? editing.purchase_price : 0;
+      payload.cost_price = editing ? editing.cost_price : 0;
+      payload.retail_price = editing ? (editing.retail_price || 0) : 0;
+      payload.wholesale_price = editing ? (editing.wholesale_price || 0) : 0;
+      payload.dealer_price = editing ? (editing.dealer_price || 0) : 0;
+    }
+    onSave(payload);
   };
 
   return (
@@ -776,12 +787,26 @@ function ProductForm({ open, onClose, onSave, editing, categories, brands, compa
 
         {/* Pricing — all rates are per piece */}
         <div>
-          <p className="mb-2 text-sm font-semibold text-slate-700">Pricing & Cost (per piece)</p>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-semibold text-slate-700">Pricing & Cost (per piece)</p>
+            {!canEditPrices && (
+              <span className="text-[11px] font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded">
+                Price Locked: Admin Only
+              </span>
+            )}
+          </div>
+          {!canEditPrices && (
+            <div className="mb-3 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 border border-amber-200">
+              <AlertTriangle size={15} className="shrink-0 text-amber-600" />
+              <span>Price Editing Locked: Only Admin has permission to modify product purchase and selling prices.</span>
+            </div>
+          )}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Field label="Purchase Price (Buy Rate / Piece)">
               <Input
                 type="number"
                 value={form.purchase_price || ''}
+                disabled={!canEditPrices}
                 onChange={(e) => {
                   const val = Number(e.target.value);
                   updateField('purchase_price', val);
@@ -794,6 +819,7 @@ function ProductForm({ open, onClose, onSave, editing, categories, brands, compa
               <Input
                 type="number"
                 value={form.dealer_price || ''}
+                disabled={!canEditPrices}
                 onChange={(e) => updateField('dealer_price', Number(e.target.value))}
                 placeholder="Dealer"
               />
@@ -802,6 +828,7 @@ function ProductForm({ open, onClose, onSave, editing, categories, brands, compa
               <Input
                 type="number"
                 value={form.wholesale_price || ''}
+                disabled={!canEditPrices}
                 onChange={(e) => updateField('wholesale_price', Number(e.target.value))}
                 placeholder="Wholesale"
               />
@@ -810,6 +837,7 @@ function ProductForm({ open, onClose, onSave, editing, categories, brands, compa
               <Input
                 type="number"
                 value={form.retail_price || ''}
+                disabled={!canEditPrices}
                 onChange={(e) => updateField('retail_price', Number(e.target.value))}
                 placeholder="Retail"
               />

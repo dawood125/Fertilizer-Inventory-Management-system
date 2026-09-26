@@ -218,23 +218,177 @@ function UserSettings() {
   );
 }
 
+const USER_PERMISSIONS_LIST = [
+  { key: 'pos', label: 'POS Billing', desc: 'Create sales orders & print bills' },
+  { key: 'orders', label: 'Sales History', desc: 'View completed sale orders & invoices' },
+  { key: 'inventory', label: 'View Inventory', desc: 'View products, stock levels, and warehouse' },
+  { key: 'edit_prices', label: 'Edit Product Prices', desc: 'Modify cost, retail, wholesale & dealer rates' },
+  { key: 'purchases', label: 'Create Purchases', desc: 'Create supplier purchase orders & bills' },
+  { key: 'approve_purchases', label: 'Approve & Receive Purchases', desc: 'Verify and inject stock into inventory' },
+  { key: 'customers', label: 'Customers & Ledgers', desc: 'Manage customer accounts, credit, and routes' },
+  { key: 'suppliers', label: 'Suppliers', desc: 'Manage supplier profiles and accounts' },
+  { key: 'expenses', label: 'Expenses', desc: 'Record and track shop expenses' },
+  { key: 'reports', label: 'View Reports & P&L', desc: 'Access financial, sales, and profit reports' },
+  { key: 'settings', label: 'System Settings', desc: 'Manage store configuration and users' },
+];
+
 function UserForm({ open, onClose, onSave, editing }: { open: boolean; onClose: () => void; onSave: (d: Partial<AppUser> & { password?: string }) => void; editing: AppUser | null }) {
-  const [form, setForm] = useState({ name: '', email: '', role: 'staff', phone: '', active: true, password: '' });
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    role: 'staff',
+    phone: '',
+    active: true,
+    password: '',
+    permissions: ['pos', 'orders', 'customers', 'inventory', 'purchases'] as string[],
+  });
+
   useEffect(() => {
-    if (editing) setForm({ name: editing.name, email: editing.email || '', role: editing.role, phone: editing.phone || '', active: editing.active, password: '' });
-    else setForm({ name: '', email: '', role: 'staff', phone: '', active: true, password: '' });
+    if (editing) {
+      setForm({
+        name: editing.name,
+        email: editing.email || '',
+        role: editing.role,
+        phone: editing.phone || '',
+        active: editing.active,
+        password: '',
+        permissions: editing.permissions && editing.permissions.length > 0
+          ? editing.permissions
+          : editing.role === 'admin'
+            ? USER_PERMISSIONS_LIST.map((p) => p.key)
+            : ['pos', 'orders', 'customers', 'inventory', 'purchases'],
+      });
+    } else {
+      setForm({
+        name: '',
+        email: '',
+        role: 'staff',
+        phone: '',
+        active: true,
+        password: '',
+        permissions: ['pos', 'orders', 'customers', 'inventory', 'purchases'],
+      });
+    }
   }, [editing, open]);
+
   return (
-    <Modal open={open} onClose={onClose} title={editing ? 'Edit User' : 'Add User'} size="md" footer={<><Button variant="outline" onClick={onClose}>Cancel</Button><Button onClick={() => onSave(form)} disabled={!form.name || (!editing && !form.password)}>Save</Button></>}>
-      <div className="space-y-3">
-        <Field label="Name" required><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus /></Field>
-        <Field label="Email"><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
-        <Field label={editing ? 'Password (leave blank to keep)' : 'Password'} required={!editing}>
-          <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder={editing ? '••••••••' : 'Required'} />
-        </Field>
-        <Field label="Phone"><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
-        <Field label="Role"><Select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}><option value="admin">Admin</option><option value="manager">Manager</option><option value="staff">Staff</option></Select></Field>
-        <Field label="Status"><Select value={String(form.active)} onChange={(e) => setForm({ ...form, active: e.target.value === 'true' })}><option value="true">Active</option><option value="false">Inactive</option></Select></Field>
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={editing ? 'Edit User & Access Control' : 'Add User & Access Control'}
+      size="lg"
+      footer={
+        <>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={() => onSave(form)} disabled={!form.name || (!editing && !form.password)}>
+            Save User
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-3.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Field label="Full Name" required>
+            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus />
+          </Field>
+          <Field label="Email Address">
+            <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Field label={editing ? 'Password (leave blank to keep)' : 'Password'} required={!editing}>
+            <Input
+              type="password"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              placeholder={editing ? '••••••••' : 'Required'}
+            />
+          </Field>
+          <Field label="Phone / Mobile">
+            <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Field label="User Role">
+            <Select
+              value={form.role}
+              onChange={(e) => {
+                const nextRole = e.target.value;
+                let nextPerms = form.permissions;
+                if (nextRole === 'admin') {
+                  nextPerms = USER_PERMISSIONS_LIST.map((p) => p.key);
+                } else if (nextRole === 'staff' && form.role === 'admin') {
+                  nextPerms = ['pos', 'orders', 'customers', 'inventory', 'purchases'];
+                }
+                setForm({ ...form, role: nextRole, permissions: nextPerms });
+              }}
+            >
+              <option value="admin">Admin (Full Owner Control)</option>
+              <option value="manager">Manager</option>
+              <option value="staff">Staff (Employee)</option>
+            </Select>
+          </Field>
+          <Field label="Account Status">
+            <Select value={String(form.active)} onChange={(e) => setForm({ ...form, active: e.target.value === 'true' })}>
+              <option value="true">Active</option>
+              <option value="false">Inactive</option>
+            </Select>
+          </Field>
+        </div>
+
+        {/* User Access Tick Marks */}
+        <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 space-y-2.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
+              User Access & Permission Tick Marks
+            </span>
+            {form.role === 'admin' ? (
+              <span className="text-[11px] font-semibold text-sky-700 bg-sky-100 px-2.5 py-0.5 rounded-full self-start sm:self-auto">
+                Admin has full unrestricted access to all modules
+              </span>
+            ) : (
+              <span className="text-[11px] text-slate-500">
+                Tick marks define which features this employee can access
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            {USER_PERMISSIONS_LIST.map((perm) => {
+              const isChecked = form.role === 'admin' || (form.permissions || []).includes(perm.key);
+              return (
+                <label
+                  key={perm.key}
+                  className={cn(
+                    'flex items-start gap-2.5 p-2 rounded-lg border transition-colors select-none',
+                    isChecked ? 'border-sky-300 bg-sky-50/60 text-slate-800' : 'border-slate-200 bg-white text-slate-500',
+                    form.role === 'admin' ? 'cursor-not-allowed opacity-75' : 'cursor-pointer hover:border-slate-300'
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    disabled={form.role === 'admin'}
+                    onChange={(e) => {
+                      if (form.role === 'admin') return;
+                      const next = e.target.checked
+                        ? [...(form.permissions || []), perm.key]
+                        : (form.permissions || []).filter((k) => k !== perm.key);
+                      setForm({ ...form, permissions: next });
+                    }}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-slate-800">{perm.label}</p>
+                    <p className="text-[11px] text-slate-500 leading-tight">{perm.desc}</p>
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </Modal>
   );

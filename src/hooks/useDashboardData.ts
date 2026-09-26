@@ -139,8 +139,17 @@ export function useDashboardData() {
       const ordersToday = tradeOrders.filter((o: any) => o.created_at?.startsWith(today));
       const ordersMonth = tradeOrders.filter((o: any) => o.created_at >= monthStart);
 
-      const todaySales = ordersToday.reduce((s: number, o: any) => s + Number(o.total), 0);
-      const monthlySales = ordersMonth.reduce((s: number, o: any) => s + Number(o.total), 0);
+      const returnsToday = returnsList.filter((r: any) => r.created_at?.startsWith(today));
+      const returnsMonth = returnsList.filter((r: any) => (r.created_at || '') >= monthStart);
+
+      const grossTodaySales = ordersToday.reduce((s: number, o: any) => s + Number(o.total), 0);
+      const grossMonthlySales = ordersMonth.reduce((s: number, o: any) => s + Number(o.total), 0);
+      const returnsTodayTotal = returnsToday.reduce((s: number, r: any) => s + Number(r.total_amount || 0), 0);
+      const returnsMonthTotal = returnsMonth.reduce((s: number, r: any) => s + Number(r.total_amount || 0), 0);
+
+      // True Net Sales (Gross - Returns), exactly matching Reports Net Sales turnover
+      const todaySales = Math.max(0, grossTodaySales - returnsTodayTotal);
+      const monthlySales = Math.max(0, grossMonthlySales - returnsMonthTotal);
 
       const calcProfit = (items: any[]) =>
         items.reduce((s: number, it: any) => {
@@ -182,9 +191,6 @@ export function useDashboardData() {
       const itemsMonth = tradeItems.filter(
         (it: any) => (it.created_at || '') >= monthStart || orderIdsMonth.has(it.order_id)
       );
-
-      const returnsToday = returnsList.filter((r: any) => r.created_at?.startsWith(today));
-      const returnsMonth = returnsList.filter((r: any) => (r.created_at || '') >= monthStart);
 
       const todayGrossProfit = Math.max(0, calcProfit(itemsToday) - calcReturnProfit(returnsToday));
       const monthlyGrossProfit = Math.max(0, calcProfit(itemsMonth) - calcReturnProfit(returnsMonth));

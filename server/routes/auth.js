@@ -8,6 +8,12 @@ const router = Router();
 
 function publicUser(row) {
   if (!row) return null;
+  let perms = [];
+  try {
+    perms = row.permissions ? (typeof row.permissions === 'string' ? JSON.parse(row.permissions) : row.permissions) : [];
+  } catch {
+    perms = [];
+  }
   return {
     id: row.id,
     name: row.name,
@@ -15,6 +21,7 @@ function publicUser(row) {
     role: row.role,
     phone: row.phone,
     active: Boolean(row.active),
+    permissions: Array.isArray(perms) ? perms : [],
     last_login: row.last_login,
     created_at: row.created_at,
   };
@@ -80,7 +87,7 @@ router.get('/users', authRequired, requireRole('admin'), (_req, res) => {
 });
 
 router.post('/users', authRequired, requireRole('admin'), (req, res) => {
-  const { name, email, password, role, phone, active } = req.body || {};
+  const { name, email, password, role, phone, active, permissions } = req.body || {};
   if (!name || !email) {
     return res.status(400).json({ error: 'Name and email are required' });
   }
@@ -93,11 +100,12 @@ router.post('/users', authRequired, requireRole('admin'), (req, res) => {
   const now = nowISO();
   const hash = password ? bcrypt.hashSync(password, 10) : null;
   const userRole = ['admin', 'manager', 'staff'].includes(role) ? role : 'staff';
+  const permStr = JSON.stringify(Array.isArray(permissions) ? permissions : []);
 
   execute(
-    `INSERT INTO users (id, name, email, password_hash, role, phone, active, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, name, email, hash, userRole, phone || null, active === false ? 0 : 1, now, now]
+    `INSERT INTO users (id, name, email, password_hash, role, phone, active, permissions, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, name, email, hash, userRole, phone || null, active === false ? 0 : 1, permStr, now, now]
   );
 
   const user = queryOne('SELECT * FROM users WHERE id = ?', [id]);
@@ -108,15 +116,16 @@ router.put('/users/:id', authRequired, requireRole('admin'), (req, res) => {
   const existing = queryOne('SELECT * FROM users WHERE id = ?', [req.params.id]);
   if (!existing) return res.status(404).json({ error: 'User not found' });
 
-  const { name, email, password, role, phone, active } = req.body || {};
+  const { name, email, password, role, phone, active, permissions } = req.body || {};
   const now = nowISO();
   let hash = existing.password_hash;
   if (password) hash = bcrypt.hashSync(password, 10);
 
   const userRole = role && ['admin', 'manager', 'staff'].includes(role) ? role : existing.role;
+  const permStr = permissions !== undefined ? JSON.stringify(Array.isArray(permissions) ? permissions : []) : existing.permissions;
 
   execute(
-    `UPDATE users SET name = ?, email = ?, password_hash = ?, role = ?, phone = ?, active = ?, updated_at = ?
+    `UPDATE users SET name = ?, email = ?, password_hash = ?, role = ?, phone = ?, active = ?, permissions = ?, updated_at = ?
      WHERE id = ?`,
     [
       name ?? existing.name,
@@ -125,6 +134,7 @@ router.put('/users/:id', authRequired, requireRole('admin'), (req, res) => {
       userRole,
       phone !== undefined ? phone : existing.phone,
       active === undefined ? existing.active : (active ? 1 : 0),
+      permStr,
       now,
       req.params.id,
     ]

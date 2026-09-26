@@ -153,6 +153,8 @@ export interface PurchaseOrder {
   expected_delivery_date: string | null;
   received_date: string | null;
   discount: number;
+  requested_by?: string | null;
+  approved_by?: string | null;
   created_at: string;
 }
 
@@ -262,6 +264,7 @@ export interface AppUser {
   role: string;
   phone: string | null;
   active: boolean;
+  permissions?: string[];
   last_login: string | null;
   created_at: string;
 }

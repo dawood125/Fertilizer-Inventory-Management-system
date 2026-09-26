@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { api, resolveImageUrl } from '@/lib/api';
 import { useSettings } from '@/context/SettingsContext';
 import { useAuth } from '@/context/AuthContext';
@@ -33,6 +33,7 @@ import {
   User,
   Clock,
   Info,
+  RefreshCw,
 } from 'lucide-react';
 import { DateTimeFilter, type DateFilterValue, isWithinDateRange } from '@/components/DateTimeFilter';
 
@@ -70,6 +71,8 @@ export function SalesReturns() {
   const [viewing, setViewing] = useState<any>(null);
   const [search, setSearch] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilterValue>({ preset: 'all' });
+  const [isCreatingReturn, setIsCreatingReturn] = useState(false);
+  const isCreatingReturnRef = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -146,6 +149,10 @@ export function SalesReturns() {
     status: string;
     note: string;
   }) => {
+    if (isCreatingReturnRef.current) return;
+    isCreatingReturnRef.current = true;
+    setIsCreatingReturn(true);
+
     try {
       const order = orders.find((o) => o.id === data.order_id);
       const custName = data.customer_id ? customers.find((c) => c.id === data.customer_id)?.name : 'Walk-in Customer';
@@ -286,9 +293,12 @@ export function SalesReturns() {
       );
       setShowForm(false);
       setInitialOrderId('');
-      load();
+      await load();
     } catch (err: any) {
       notify(err?.message || 'Failed to create returns', 'error');
+    } finally {
+      isCreatingReturnRef.current = false;
+      setIsCreatingReturn(false);
     }
   };
 
@@ -552,8 +562,10 @@ export function SalesReturns() {
       <MultiItemReturnForm
         open={showForm}
         onClose={() => {
-          setShowForm(false);
-          setInitialOrderId('');
+          if (!isCreatingReturn) {
+            setShowForm(false);
+            setInitialOrderId('');
+          }
         }}
         onCreate={createBatch}
         orders={orders}
@@ -565,6 +577,7 @@ export function SalesReturns() {
         existingReturns={items}
         symbol={symbol}
         initialOrderId={initialOrderId}
+        submitting={isCreatingReturn}
       />
 
       {/* View Return Modal */}
@@ -695,6 +708,7 @@ function MultiItemReturnForm({
   existingReturns,
   symbol,
   initialOrderId,
+  submitting = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -708,6 +722,7 @@ function MultiItemReturnForm({
   existingReturns: any[];
   symbol: string;
   initialOrderId?: string;
+  submitting?: boolean;
 }) {
   const [orderId, setOrderId] = useState('');
   const [resolution, setResolution] = useState('refund');
@@ -882,7 +897,7 @@ function MultiItemReturnForm({
   const canSubmit = orderId && selectedRows.length > 0 && totalReturnAmount > 0;
 
   const handleSubmit = () => {
-    if (!canSubmit) return;
+    if (!canSubmit || submitting) return;
 
     const payloadItems: ReturnItemPayload[] = selectedRows.map((r) => ({
       product_id: r.product_id,
@@ -908,7 +923,7 @@ function MultiItemReturnForm({
   return (
     <Modal
       open={open}
-      onClose={onClose}
+      onClose={() => !submitting && onClose()}
       title="Create Sales Return"
       size="xl"
       className="my-1 sm:my-2"
@@ -926,15 +941,15 @@ function MultiItemReturnForm({
             )}
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={onClose}>
+            <Button variant="outline" onClick={onClose} disabled={submitting}>
               Cancel
             </Button>
             <Button
               onClick={handleSubmit}
-              disabled={!canSubmit}
-              icon={<CheckCircle2 size={16} />}
+              disabled={!canSubmit || submitting}
+              icon={submitting ? <RefreshCw size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
             >
-              Confirm Return ({formatCurrency(totalReturnAmount, symbol)})
+              {submitting ? 'Processing Return...' : `Confirm Return (${formatCurrency(totalReturnAmount, symbol)})`}
             </Button>
           </div>
         </div>

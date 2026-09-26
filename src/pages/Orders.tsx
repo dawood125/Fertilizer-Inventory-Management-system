@@ -397,6 +397,19 @@ export function Orders() {
             total={Number(viewOrder.total)}
             paidAmount={Number(viewOrder.paid_amount)}
             remaining={Math.max(0, Number(viewOrder.total) - Number(viewOrder.paid_amount || 0))}
+            paymentMethod={
+              (viewOrder.payments && viewOrder.payments.length > 0)
+                ? Array.from(new Set(viewOrder.payments.map((p: any) => p.method).filter(Boolean)))
+                    .map((m: any) => String(m).charAt(0).toUpperCase() + String(m).slice(1).toLowerCase())
+                    .join(', ')
+                : (Number(viewOrder.paid_amount || 0) === 0 ? 'Credit' : 'Cash')
+            }
+            previousBalance={
+              viewOrder.customers?.balance != null
+                ? Number(viewOrder.customers.balance) - Math.max(0, Number(viewOrder.total) - Number(viewOrder.paid_amount || 0))
+                : undefined
+            }
+            currentBalance={viewOrder.customers?.balance != null ? Number(viewOrder.customers.balance) : undefined}
             symbol={symbol}
             paperSize={settings?.receipt_size === 'A4' ? 'A4' : 'A5'}
           />

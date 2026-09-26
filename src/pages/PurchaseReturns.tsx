@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { api, resolveImageUrl } from '@/lib/api';
 import { useSettings } from '@/context/SettingsContext';
 import { useToast } from '@/components/Toast';
@@ -21,6 +21,7 @@ import {
   Minus,
   CheckSquare,
   Info,
+  RefreshCw,
 } from 'lucide-react';
 import { DateTimeFilter, type DateFilterValue, isWithinDateRange } from '@/components/DateTimeFilter';
 
@@ -40,6 +41,8 @@ export function PurchaseReturns() {
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [search, setSearch] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilterValue>({ preset: 'all' });
+  const [isCreatingReturn, setIsCreatingReturn] = useState(false);
+  const isCreatingReturnRef = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -97,6 +100,10 @@ export function PurchaseReturns() {
   }, [load]);
 
   const create = async (data: any) => {
+    if (isCreatingReturnRef.current) return;
+    isCreatingReturnRef.current = true;
+    setIsCreatingReturn(true);
+
     try {
       const itemsList = Array.isArray(data.items) ? data.items : [data];
       const grandTotal = itemsList.reduce((s: number, it: any) => s + Number(it.quantity) * Number(it.unit_cost), 0);
@@ -225,9 +232,12 @@ export function PurchaseReturns() {
 
       notify(`Purchase return recorded successfully (${formatCurrency(grandTotal, symbol)})`, 'success');
       setShowForm(false);
-      load();
+      await load();
     } catch {
       notify('Failed to create purchase return', 'error');
+    } finally {
+      isCreatingReturnRef.current = false;
+      setIsCreatingReturn(false);
     }
   };
 
@@ -568,7 +578,9 @@ export function PurchaseReturns() {
 
       <ReturnForm
         open={showForm}
-        onClose={() => setShowForm(false)}
+        onClose={() => {
+          if (!isCreatingReturn) setShowForm(false);
+        }}
         onCreate={create}
         pos={pos}
         suppliers={suppliers}
@@ -578,6 +590,7 @@ export function PurchaseReturns() {
         existingReturns={items}
         brands={brands}
         symbol={symbol}
+        submitting={isCreatingReturn}
       />
 
       {/* Viewing Return Details Modal */}
@@ -719,6 +732,7 @@ function ReturnForm({
   existingReturns,
   brands = [],
   symbol,
+  submitting = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -731,6 +745,7 @@ function ReturnForm({
   existingReturns: any[];
   brands?: any[];
   symbol: string;
+  submitting?: boolean;
 }) {
   const [purchaseId, setPurchaseId] = useState('');
   const [resolution, setResolution] = useState('credit_note');
@@ -884,7 +899,7 @@ function ReturnForm({
   const canSubmit = purchaseId && selectedRows.length > 0 && totalReturnAmount > 0;
 
   const handleSubmit = () => {
-    if (!canSubmit) return;
+    if (!canSubmit || submitting) return;
 
     const payloadItems = selectedRows.map((r) => ({
       product_id: r.product_id,
@@ -909,7 +924,7 @@ function ReturnForm({
   return (
     <Modal
       open={open}
-      onClose={onClose}
+      onClose={() => !submitting && onClose()}
       title="Create Purchase Return"
       size="xl"
       className="my-1 sm:my-2"
@@ -927,15 +942,15 @@ function ReturnForm({
             )}
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={onClose}>
+            <Button variant="outline" onClick={onClose} disabled={submitting}>
               Cancel
             </Button>
             <Button
               onClick={handleSubmit}
-              disabled={!canSubmit}
-              icon={<CheckCircle2 size={16} />}
+              disabled={!canSubmit || submitting}
+              icon={submitting ? <RefreshCw size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
             >
-              Confirm Return ({formatCurrency(totalReturnAmount, symbol)})
+              {submitting ? 'Processing Return...' : `Confirm Return (${formatCurrency(totalReturnAmount, symbol)})`}
             </Button>
           </div>
         </div>

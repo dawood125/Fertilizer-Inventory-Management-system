@@ -36,24 +36,32 @@ import {
   Upload,
   Download,
   FileSpreadsheet,
+  ShieldCheck,
+  Clock,
+  Send,
 } from 'lucide-react';
 import { parseCsv, generateCsv, downloadCsv, PO_ITEMS_CSV_HEADERS, PO_ITEMS_CSV_SAMPLE_ROWS } from '@/lib/csv';
 import { DateTimeFilter, type DateFilterValue, isWithinDateRange } from '@/components/DateTimeFilter';
+import { useAuth } from '@/context/AuthContext';
 
 // ===== PURCHASE ORDERS =====
 export function PurchaseOrders() {
   const { symbol, settings, logoSrc } = useSettings();
   const { notify } = useToast();
+  const { user, isAdmin, hasPermission } = useAuth();
+  const canApprove = isAdmin || hasPermission('approve_purchases');
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [viewOrder, setViewOrder] = useState<any>(null);
+  const [approvalTarget, setApprovalTarget] = useState<any | null>(null);
   const [printPreview, setPrintPreview] = useState(false);
   const [search, setSearch] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilterValue>({ preset: 'all' });
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [receivingId, setReceivingId] = useState<string | null>(null);
+  const [requestingId, setRequestingId] = useState<string | null>(null);
   const receivingRef = useRef<Set<string>>(new Set());
 
   const load = useCallback(async () => {
@@ -90,6 +98,36 @@ export function PurchaseOrders() {
       setPrintPreview(false);
     } catch {
       setViewOrder({ ...po, items: [] });
+    }
+  };
+
+  const openApprovalModal = async (po: any) => {
+    try {
+      let items = po.items;
+      if (!items || !items.length) {
+        const all = await api.get<any[]>('/api/data/purchase_items');
+        items = (all || []).filter((i) => i.purchase_id === po.id);
+      }
+      setApprovalTarget({ ...po, items });
+    } catch {
+      setApprovalTarget({ ...po, items: [] });
+    }
+  };
+
+  const requestApprovalPO = async (po: any) => {
+    if (!po?.id || requestingId) return;
+    setRequestingId(po.id);
+    try {
+      await api.put(`/api/data/purchase_orders/${po.id}`, {
+        status: 'pending_approval',
+        requested_by: user?.name || 'Staff',
+      });
+      notify(`PO ${po.po_number} submitted to Owner for verification & approval!`, 'success');
+      load();
+    } catch (e: any) {
+      notify(e.message || 'Failed to submit for approval', 'error');
+    } finally {
+      setRequestingId(null);
     }
   };
 
@@ -170,6 +208,7 @@ export function PurchaseOrders() {
       await api.put(`/api/data/purchase_orders/${po.id}`, {
         status: 'received',
         received_date: new Date().toISOString().slice(0, 10),
+        approved_by: user?.name || 'Owner',
       });
       notify('Products received: Stock, Batch ID & Selling Rates updated!', 'success');
       load();
@@ -237,21 +276,70 @@ export function PurchaseOrders() {
                       <td>{o.suppliers?.name || '—'}</td>
                       <td className="text-slate-500">{formatDateTime(o.created_at)}</td>
                       <td className="font-semibold">{formatCurrency(o.total, symbol)}</td>
-                      <td><Badge variant={o.status === 'received' ? 'green' : o.status === 'pending' ? 'amber' : 'gray'}>{o.status}</Badge></td>
+                      <td>
+                        {o.status === 'received' ? (
+                          <div className="flex flex-col items-start gap-0.5">
+                            <Badge variant="green">Received</Badge>
+                            {o.approved_by && (
+                              <span className="text-[10px] text-slate-500 font-medium">By {o.approved_by}</span>
+                            )}
+                          </div>
+                        ) : o.status === 'pending_approval' ? (
+                          <div className="flex flex-col items-start gap-0.5">
+                            <Badge variant="purple" className="flex items-center gap-1">
+                              <Clock size={11} /> Pending Approval
+                            </Badge>
+                            {o.requested_by && (
+                              <span className="text-[10px] text-violet-700 font-medium">Req by {o.requested_by}</span>
+                            )}
+                          </div>
+                        ) : (
+                          <Badge variant="amber">Pending</Badge>
+                        )}
+                      </td>
                       <td><Badge variant={o.payment_status === 'paid' ? 'green' : 'red'}>{o.payment_status}</Badge></td>
                       <td>
-                        <div className="flex justify-end gap-1">
-                          <button onClick={() => openView(o)} className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"><Eye size={16} /></button>
+                        <div className="flex justify-end gap-1.5 items-center">
+                          <button onClick={() => openView(o)} className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100" title="View Details">
+                            <Eye size={16} />
+                          </button>
+                          {o.status === 'pending_approval' && (
+                            canApprove ? (
+                              <Button
+                                size="sm"
+                                variant="success"
+                                icon={<ShieldCheck size={14} />}
+                                onClick={() => openApprovalModal(o)}
+                              >
+                                Verify & Approve
+                              </Button>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-xs text-violet-700 bg-violet-50 border border-violet-200 px-2 py-1 rounded-md font-medium">
+                                <Clock size={12} /> Awaiting Approval
+                              </span>
+                            )
+                          )}
                           {o.status === 'pending' && (
-                            <Button
-                              size="sm"
-                              variant="success"
-                              icon={receivingId === o.id ? <Spinner size="sm" /> : <CheckCircle2 size={14} />}
-                              onClick={() => receivePO(o)}
-                              disabled={receivingId === o.id}
-                            >
-                              {receivingId === o.id ? 'Receiving...' : 'Receive'}
-                            </Button>
+                            canApprove ? (
+                              <Button
+                                size="sm"
+                                variant="success"
+                                icon={<ShieldCheck size={14} />}
+                                onClick={() => openApprovalModal(o)}
+                              >
+                                Approve & Receive
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                icon={requestingId === o.id ? <Spinner size="sm" /> : <Send size={14} />}
+                                onClick={() => requestApprovalPO(o)}
+                                disabled={requestingId === o.id}
+                              >
+                                {requestingId === o.id ? 'Requesting...' : 'Request Receive'}
+                              </Button>
+                            )
                           )}
                         </div>
                       </td>
@@ -275,6 +363,111 @@ export function PurchaseOrders() {
       </Card>
 
       <CreatePOModal open={showForm} onClose={() => setShowForm(false)} onCreated={load} />
+
+      {/* Verify & Approve Purchase Order Modal */}
+      <Modal
+        open={!!approvalTarget}
+        onClose={() => setApprovalTarget(null)}
+        title={`Verify & Approve Purchase — ${approvalTarget?.po_number || ''}`}
+        size="2xl"
+        footer={
+          <div className="flex items-center justify-between w-full">
+            <Button variant="outline" onClick={() => setApprovalTarget(null)} disabled={receivingId === approvalTarget?.id}>
+              Cancel
+            </Button>
+            <Button
+              variant="success"
+              icon={receivingId === approvalTarget?.id ? <Spinner size="sm" /> : <ShieldCheck size={16} />}
+              onClick={async () => {
+                await receivePO(approvalTarget);
+                setApprovalTarget(null);
+              }}
+              disabled={receivingId === approvalTarget?.id}
+            >
+              {receivingId === approvalTarget?.id ? 'Approving & Restocking...' : 'Approve & Restock Inventory'}
+            </Button>
+          </div>
+        }
+      >
+        {approvalTarget && (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-sky-200 bg-sky-50/70 p-3 text-xs text-sky-800 flex items-start gap-2.5">
+              <ShieldCheck size={18} className="text-sky-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-sky-900">Owner Verification Required</p>
+                <p className="mt-0.5 text-sky-700">
+                  Please verify item quantities, chemical batch numbers, purchase buy rates, and proposed selling rates below. Approving will update stock, create FIFO batch layers, update selling prices, and post to supplier ledger.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3 text-xs">
+              <div>
+                <span className="text-slate-400 block">Supplier</span>
+                <span className="font-semibold text-slate-800">{approvalTarget.suppliers?.name || '—'}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block">PO Date</span>
+                <span className="font-semibold text-slate-800">{formatDateTime(approvalTarget.created_at)}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block">Requested By</span>
+                <span className="font-semibold text-violet-700">{approvalTarget.requested_by || 'Direct / Staff'}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block">Order Total</span>
+                <span className="font-bold text-slate-900">{formatCurrency(approvalTarget.total, symbol)}</span>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="data-table text-xs">
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th>Batch #</th>
+                    <th>Cartons</th>
+                    <th>Pcs/Ctn</th>
+                    <th>Total Pcs</th>
+                    <th>Buy Rate / Pc</th>
+                    <th>New Selling Rates</th>
+                    <th className="text-right">Line Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {approvalTarget.items?.map((it: any) => (
+                    <tr key={it.id || it.product_id}>
+                      <td className="font-semibold text-slate-800">{it.product_name}</td>
+                      <td>
+                        {it.batch_number ? (
+                          <span className="font-mono text-xs font-semibold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100">
+                            {it.batch_number}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 font-mono">—</span>
+                        )}
+                      </td>
+                      <td>{it.cartons || (it.pieces_per_carton ? (it.quantity / it.pieces_per_carton).toFixed(1) : '—')}</td>
+                      <td>{it.pieces_per_carton || '—'}</td>
+                      <td className="font-bold text-slate-900">{it.quantity}</td>
+                      <td className="font-semibold text-slate-800">{formatCurrency(it.unit_cost, symbol)}</td>
+                      <td className="text-[11px] text-slate-600">
+                        <div className="space-y-0.5">
+                          {Number(it.retail_price) > 0 && <div>Retail: <span className="font-medium text-emerald-700">{formatCurrency(it.retail_price, symbol)}</span></div>}
+                          {Number(it.wholesale_price) > 0 && <div>WS: <span className="font-medium text-sky-700">{formatCurrency(it.wholesale_price, symbol)}</span></div>}
+                          {Number(it.dealer_price) > 0 && <div>Dealer: <span className="font-medium text-amber-700">{formatCurrency(it.dealer_price, symbol)}</span></div>}
+                          {!Number(it.retail_price) && !Number(it.wholesale_price) && !Number(it.dealer_price) && <span className="text-slate-400">Keep current</span>}
+                        </div>
+                      </td>
+                      <td className="text-right font-bold text-slate-900">{formatCurrency(it.total, symbol)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </Modal>
       <Modal
         open={!!viewOrder && !printPreview}
         onClose={() => setViewOrder(null)}
@@ -336,19 +529,70 @@ export function PurchaseOrders() {
                 <div className="flex justify-between text-slate-600"><span>Paid</span><span className="font-semibold text-emerald-600">{formatCurrency(viewOrder.paid_amount, symbol)}</span></div>
               </div>
             </div>
-            {viewOrder.status === 'pending' && (
-              <Button
-                className="mt-4 w-full"
-                variant="success"
-                icon={receivingId === viewOrder.id ? <Spinner size="sm" /> : <CheckCircle2 size={18} />}
-                onClick={async () => {
-                  await receivePO(viewOrder);
-                  setViewOrder(null);
-                }}
-                disabled={receivingId === viewOrder.id}
-              >
-                {receivingId === viewOrder.id ? 'Receiving & Updating Stock...' : 'Mark as Received & Update Stock'}
-              </Button>
+            {viewOrder.status === 'received' ? (
+              <div className="mt-4 rounded-xl bg-emerald-50 border border-emerald-200 p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs text-emerald-800">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                  <span>Received & Approved on <strong>{viewOrder.received_date || formatDateTime(viewOrder.created_at)}</strong></span>
+                </div>
+                {viewOrder.approved_by && (
+                  <span className="font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">Approved by: {viewOrder.approved_by}</span>
+                )}
+              </div>
+            ) : viewOrder.status === 'pending_approval' ? (
+              <div className="mt-4 space-y-3">
+                <div className="rounded-xl bg-violet-50 border border-violet-200 p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs text-violet-800">
+                  <div className="flex items-center gap-2">
+                    <Clock size={16} className="text-violet-600 shrink-0" />
+                    <span>Goods arrival reported. Awaiting Owner verification & approval before inventory is updated.</span>
+                  </div>
+                  {viewOrder.requested_by && (
+                    <span className="font-semibold bg-violet-100 text-violet-800 px-2 py-0.5 rounded">Requested by: {viewOrder.requested_by}</span>
+                  )}
+                </div>
+                {canApprove && (
+                  <Button
+                    className="w-full"
+                    variant="success"
+                    icon={<ShieldCheck size={18} />}
+                    onClick={() => {
+                      setApprovalTarget(viewOrder);
+                      setViewOrder(null);
+                    }}
+                  >
+                    Verify Rates & Approve Stock Receive
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="mt-4">
+                {canApprove ? (
+                  <Button
+                    className="w-full"
+                    variant="success"
+                    icon={<ShieldCheck size={18} />}
+                    onClick={() => {
+                      setApprovalTarget(viewOrder);
+                      setViewOrder(null);
+                    }}
+                  >
+                    Verify Rates & Approve Stock Receive
+                  </Button>
+                ) : (
+                  <Button
+                    className="w-full"
+                    variant="secondary"
+                    icon={requestingId === viewOrder.id ? <Spinner size="sm" /> : <Send size={18} />}
+                    onClick={async () => {
+                      await requestApprovalPO(viewOrder);
+                      setViewOrder(null);
+                    }}
+                    disabled={requestingId === viewOrder.id}
+                  >
+                    {requestingId === viewOrder.id ? 'Sending Request...' : 'Request Owner Approval to Receive'}
+                  </Button>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -414,6 +658,7 @@ export function PurchaseOrders() {
 
 function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: () => void }) {
   const { symbol } = useSettings();
+  const { user } = useAuth();
   const { notify } = useToast();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -598,7 +843,16 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
     try {
       const poNumber = generateDocNumber('PO');
       const po = await api.post<any>('/api/data/purchase_orders', {
-        po_number: poNumber, supplier_id: supplierId || null, subtotal, tax: 0, total, paid_amount: 0, status: 'pending', payment_status: 'unpaid', note,
+        po_number: poNumber,
+        supplier_id: supplierId || null,
+        subtotal,
+        tax: 0,
+        total,
+        paid_amount: 0,
+        status: 'pending',
+        payment_status: 'unpaid',
+        note,
+        requested_by: user?.name || null,
       });
       for (const l of lines) {
         await api.post('/api/data/purchase_items', {
@@ -1942,6 +2196,7 @@ function PaySupplierModal({
   const [method, setMethod] = useState('cash');
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const { notify } = useToast();
 
   useEffect(() => {
@@ -1955,8 +2210,10 @@ function PaySupplierModal({
   if (!supplier) return null;
 
   const handlePay = async () => {
+    if (submittingRef.current) return;
     const payAmt = Number(amount);
     if (payAmt <= 0) return;
+    submittingRef.current = true;
     setSubmitting(true);
     try {
       // 1. Deduct from payment account
@@ -2022,6 +2279,7 @@ function PaySupplierModal({
     } catch (e: any) {
       notify(e.message || 'Payment failed', 'error');
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };

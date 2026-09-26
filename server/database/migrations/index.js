@@ -33,6 +33,7 @@ export function runMigrations(db) {
     { name: '011_fifo_inventory_batches', sql: MIGRATION_011 },
     { name: '012_purchase_item_selling_prices', sql: MIGRATION_012 },
     { name: '013_fertilizer_po_batches', sql: MIGRATION_013 },
+    { name: '014_user_permissions_and_po_approval', sql: MIGRATION_014 },
   ];
 
   for (const m of migrations) {
@@ -570,4 +571,10 @@ ALTER TABLE purchase_items ADD COLUMN batch_number TEXT;
 ALTER TABLE purchase_items ADD COLUMN cartons REAL DEFAULT 0;
 ALTER TABLE purchase_items ADD COLUMN pieces_per_carton REAL DEFAULT 1;
 ALTER TABLE order_items ADD COLUMN batch_number TEXT;
+`;
+
+const MIGRATION_014 = `
+ALTER TABLE users ADD COLUMN permissions TEXT DEFAULT '[]';
+ALTER TABLE purchase_orders ADD COLUMN requested_by TEXT;
+ALTER TABLE purchase_orders ADD COLUMN approved_by TEXT;
 `;

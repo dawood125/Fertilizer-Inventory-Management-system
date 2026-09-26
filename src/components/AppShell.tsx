@@ -97,7 +97,7 @@ export function AppShell({
   const visibleSections = navSections
     .map((section) => ({
       ...section,
-      items: section.items.filter((item) => roleCanAccess(user?.role, item.path)),
+      items: section.items.filter((item) => roleCanAccess(user, item.path)),
     }))
     .filter((section) => section.items.length > 0);
 

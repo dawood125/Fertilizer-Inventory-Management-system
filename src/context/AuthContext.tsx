@@ -8,6 +8,7 @@ export type AuthUser = {
   role: 'admin' | 'manager' | 'staff' | string;
   phone?: string | null;
   active?: boolean;
+  permissions?: string[];
 };
 
 interface AuthContextValue {
@@ -20,14 +21,39 @@ interface AuthContextValue {
   isManager: boolean;
   isStaff: boolean;
   canAccess: (path: string) => boolean;
+  hasPermission: (permission: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-/** Nav/path access by role */
-export function roleCanAccess(role: string | undefined, path: string): boolean {
+/** Nav/path access by role and customized permissions */
+export function roleCanAccess(userOrRole: AuthUser | string | undefined | null, path: string): boolean {
+  if (!userOrRole) return false;
+  const role = typeof userOrRole === 'string' ? userOrRole : userOrRole.role;
+  const permissions = typeof userOrRole === 'object' && userOrRole ? userOrRole.permissions : undefined;
   if (!role) return false;
   if (role === 'admin') return true;
+
+  if (Array.isArray(permissions) && permissions.length > 0) {
+    if (path === '/') return true;
+    if (path === '/pos' || path.startsWith('/pos/')) return permissions.includes('pos');
+    if (path === '/orders' || path.startsWith('/orders/')) return permissions.includes('orders');
+    if (path === '/products' || path.startsWith('/products/') || path === '/stock' || path.startsWith('/stock/')) {
+      return permissions.includes('inventory');
+    }
+    if (path === '/purchases' || path.startsWith('/purchases/') || path === '/purchase-orders' || path.startsWith('/purchase-orders/')) {
+      return permissions.includes('purchases');
+    }
+    if (path === '/customers' || path.startsWith('/customers/')) return permissions.includes('customers');
+    if (path === '/suppliers' || path.startsWith('/suppliers/')) return permissions.includes('suppliers');
+    if (path === '/expenses' || path.startsWith('/expenses/')) return permissions.includes('expenses');
+    if (path === '/reports' || path.startsWith('/reports/')) return permissions.includes('reports');
+    if (path === '/pending-payments' || path.startsWith('/pending-payments/')) {
+      return permissions.includes('pos') || permissions.includes('purchases');
+    }
+    if (path === '/settings' || path.startsWith('/settings/')) return permissions.includes('settings');
+    return false;
+  }
 
   if (role === 'staff') {
     const allowed = ['/', '/pos', '/orders', '/customers', '/products'];
@@ -35,7 +61,7 @@ export function roleCanAccess(role: string | undefined, path: string): boolean {
   }
 
   if (role === 'manager') {
-    return true; // user-management gated inside Settings UI
+    return true;
   }
 
   return false;
@@ -119,7 +145,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAdmin: user?.role === 'admin',
       isManager: user?.role === 'manager' || user?.role === 'admin',
       isStaff: user?.role === 'staff',
-      canAccess: (path: string) => roleCanAccess(user?.role, path),
+      canAccess: (path: string) => roleCanAccess(user, path),
+      hasPermission: (perm: string) => {
+        if (!user) return false;
+        if (user.role === 'admin') return true;
+        if (Array.isArray(user.permissions) && user.permissions.length > 0) {
+          return user.permissions.includes(perm);
+        }
+        if (user.role === 'manager') return perm !== 'settings';
+        if (user.role === 'staff') {
+          return ['pos', 'orders', 'customers', 'inventory'].includes(perm);
+        }
+        return false;
+      },
     }),
     [user, loading, login, logout, refreshMe]
   );

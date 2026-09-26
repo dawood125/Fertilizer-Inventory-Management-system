@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo, Fragment } from 'react';
+import { useEffect, useState, useCallback, useMemo, Fragment, useRef } from 'react';
 import { api } from '@/lib/api';
 import type { PaymentAccount, Transaction, OrderPayment, SupplierPayment } from '@/lib/types';
 import { useSettings } from '@/context/SettingsContext';
@@ -28,6 +28,7 @@ import {
   Layers,
   ArrowDownLeft,
   CheckCircle2,
+  RefreshCw,
 } from 'lucide-react';
 
 const ACCOUNTS = [
@@ -223,6 +224,8 @@ export function PendingPayments() {
   const [allCustomers, setAllCustomers] = useState<any[]>([]);
   const [paymentAccounts, setPaymentAccounts] = useState<any[]>([]);
   const [supplierRefundModal, setSupplierRefundModal] = useState<{ supplier: any; creditAmount: number } | null>(null);
+  const [isPaying, setIsPaying] = useState(false);
+  const isPayingRef = useRef(false);
   const [customerRefundModal, setCustomerRefundModal] = useState<{ customer: any; creditAmount: number } | null>(null);
 
   const load = useCallback(async () => {
@@ -398,30 +401,42 @@ export function PendingPayments() {
   }, [allCustomers]);
 
   const pay = async (method: string, amount: number, note: string) => {
-    if (!payModal) return;
+    if (!payModal || isPayingRef.current) return;
+    isPayingRef.current = true;
+    setIsPaying(true);
+
     try {
       if (payModal.type === 'customer') {
         const order = pendingOrders.find((o) => o.id === payModal.id);
-        const newPaid = Number(order?.paid_amount || 0) + amount;
-        const status = newPaid >= Number(order?.total || 0) ? 'paid' : 'partial';
+        const orderTotal = Number(order?.total || 0);
+        const currentPaid = Number(order?.paid_amount || 0);
+        const currentDue = Math.max(0, orderTotal - currentPaid);
+        if (currentDue <= 0) {
+          notify('This invoice is already fully settled', 'info');
+          setPayModal(null);
+          return;
+        }
+        const effectiveAmount = Math.min(amount, currentDue);
+        const newPaid = currentPaid + effectiveAmount;
+        const status = newPaid >= orderTotal ? 'paid' : 'partial';
         await api.put(`/api/data/orders/${payModal.id}`, { paid_amount: newPaid, payment_status: status });
 
         await api.post('/api/data/order_payments', {
           order_id: payModal.id,
           method,
           account_type: method,
-          amount,
+          amount: effectiveAmount,
           note: note.trim() || `Payment for ${order?.order_number || 'Invoice'}`,
         });
 
         if (method !== 'credit') {
           const accounts = await api.get<any[]>('/api/data/payment_accounts');
           const account = (accounts || []).find((a) => a.type === method);
-          if (account) await api.put(`/api/data/payment_accounts/${account.id}`, { balance: account.balance + amount });
+          if (account) await api.put(`/api/data/payment_accounts/${account.id}`, { balance: account.balance + effectiveAmount });
           await api.post('/api/data/transactions', {
             type: 'sale_payment',
             account_type: method,
-            amount,
+            amount: effectiveAmount,
             reference_type: 'order',
             reference_id: payModal.id,
             note: note.trim() || `Payment for ${order?.order_number || 'Invoice'}`,
@@ -429,12 +444,22 @@ export function PendingPayments() {
         }
         if (order?.customer_id) {
           const cust = await api.get<any>(`/api/data/customers/${order.customer_id}`);
-          if (cust) await api.put(`/api/data/customers/${order.customer_id}`, { balance: Number(cust.balance || 0) - amount });
+          if (cust) await api.put(`/api/data/customers/${order.customer_id}`, { balance: Number(cust.balance || 0) - effectiveAmount });
         }
+        notify(`Payment of ${formatCurrency(effectiveAmount, symbol)} recorded with date & time`, 'success');
       } else {
         const po = pendingPOs.find((p) => p.id === payModal.id);
-        const newPaid = Number(po?.paid_amount || 0) + amount;
-        const status = newPaid >= Number(po?.total || 0) ? 'paid' : 'partial';
+        const poTotal = Number(po?.total || 0);
+        const currentPaid = Number(po?.paid_amount || 0);
+        const currentDue = Math.max(0, poTotal - currentPaid);
+        if (currentDue <= 0) {
+          notify('This purchase order is already fully paid', 'info');
+          setPayModal(null);
+          return;
+        }
+        const effectiveAmount = Math.min(amount, currentDue);
+        const newPaid = currentPaid + effectiveAmount;
+        const status = newPaid >= poTotal ? 'paid' : 'partial';
         await api.put(`/api/data/purchase_orders/${payModal.id}`, { paid_amount: newPaid, payment_status: status });
 
         await api.post('/api/data/supplier_payments', {
@@ -442,18 +467,18 @@ export function PendingPayments() {
           supplier_id: po?.supplier_id || null,
           method,
           account_type: method,
-          amount,
+          amount: effectiveAmount,
           note: note.trim() || `Payment for ${po?.po_number || 'PO'}`,
         });
 
         if (method !== 'credit') {
           const accounts = await api.get<any[]>('/api/data/payment_accounts');
           const account = (accounts || []).find((a) => a.type === method);
-          if (account) await api.put(`/api/data/payment_accounts/${account.id}`, { balance: account.balance - amount });
+          if (account) await api.put(`/api/data/payment_accounts/${account.id}`, { balance: account.balance - effectiveAmount });
           await api.post('/api/data/transactions', {
             type: 'supplier_payment',
             account_type: method,
-            amount,
+            amount: effectiveAmount,
             reference_type: 'purchase',
             reference_id: payModal.id,
             note: note.trim() || `Payment for ${po?.po_number || 'PO'}`,
@@ -461,14 +486,17 @@ export function PendingPayments() {
         }
         if (po?.supplier_id) {
           const sup = await api.get<any>(`/api/data/suppliers/${po.supplier_id}`);
-          if (sup) await api.put(`/api/data/suppliers/${po.supplier_id}`, { balance: Number(sup.balance || 0) - amount });
+          if (sup) await api.put(`/api/data/suppliers/${po.supplier_id}`, { balance: Number(sup.balance || 0) - effectiveAmount });
         }
+        notify(`Payment of ${formatCurrency(effectiveAmount, symbol)} recorded with date & time`, 'success');
       }
-      notify(`Payment of ${formatCurrency(amount, symbol)} recorded with date & time`, 'success');
       setPayModal(null);
-      load();
+      await load();
     } catch (e: any) {
       notify(e.message || 'Payment failed', 'error');
+    } finally {
+      isPayingRef.current = false;
+      setIsPaying(false);
     }
   };
 
@@ -1074,9 +1102,10 @@ export function PendingPayments() {
 
       <PayModal
         modal={payModal}
-        onClose={() => setPayModal(null)}
+        onClose={() => !isPaying && setPayModal(null)}
         onPay={pay}
         symbol={symbol}
+        submitting={isPaying}
       />
 
       <PaymentHistoryModal
@@ -1397,11 +1426,13 @@ function PayModal({
   onClose,
   onPay,
   symbol,
+  submitting = false,
 }: {
   modal: any;
   onClose: () => void;
   onPay: (m: string, a: number, note: string) => void;
   symbol: string;
+  submitting?: boolean;
 }) {
   const [method, setMethod] = useState('cash');
   const [amount, setAmount] = useState<number | string>('');
@@ -1425,26 +1456,29 @@ function PayModal({
 
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (numAmount <= 0) return;
+    if (numAmount <= 0 || submitting) return;
     onPay(method, numAmount, note);
   };
 
   return (
     <Modal
       open={!!modal}
-      onClose={onClose}
+      onClose={() => !submitting && onClose()}
       title={`${modal.type === 'customer' ? 'Receive Payment' : 'Pay Supplier'} — ${modal.name}`}
       size="sm"
       footer={
         <>
-          <Button variant="outline" type="button" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" type="button" onClick={onClose} disabled={submitting}>
+            Cancel
+          </Button>
           <Button
             variant={modal.type === 'customer' ? 'primary' : 'success'}
             type="button"
             onClick={() => handleSubmit()}
-            disabled={numAmount <= 0}
+            disabled={numAmount <= 0 || submitting}
+            icon={submitting ? <RefreshCw size={15} className="animate-spin" /> : undefined}
           >
-            Confirm {formatCurrency(numAmount, symbol)}
+            {submitting ? 'Recording Payment...' : `Confirm ${formatCurrency(numAmount, symbol)}`}
           </Button>
         </>
       }
