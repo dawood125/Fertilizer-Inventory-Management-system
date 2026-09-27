@@ -107,11 +107,11 @@ export function AppShell({
       {!isPosMode && (
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-40 w-64 transform border-r border-slate-200 bg-white transition-transform duration-200 lg:static lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-40 w-64 transform border-r border-slate-200 bg-white transition-transform duration-200 lg:static lg:translate-x-0 flex flex-col h-full max-h-[100dvh]',
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        <div className="flex h-16 items-center gap-2.5 border-b border-slate-100 px-5">
+        <div className="flex h-16 shrink-0 items-center gap-2.5 border-b border-slate-100 px-5">
           {logoSrc ? (
             <img src={logoSrc} alt="Logo" className="h-9 w-9 rounded-xl object-cover" />
           ) : (
@@ -119,15 +119,22 @@ export function AppShell({
               <Sprout size={20} />
             </div>
           )}
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-bold text-slate-800">
               {settings?.store_name || 'FMCG'}
             </p>
             <p className="truncate text-xs text-slate-400">Distribution System</p>
           </div>
+          <button
+            onClick={() => setMobileOpen(false)}
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 lg:hidden"
+            aria-label="Close sidebar"
+          >
+            <X size={18} />
+          </button>
         </div>
 
-        <nav className="flex h-[calc(100vh-4rem)] flex-col overflow-y-auto px-3 py-4">
+        <nav className="flex-1 overflow-y-auto overscroll-contain px-3 py-3 pb-28 sm:pb-8">
           {visibleSections.map((section) => (
             <div key={section.label} className="mb-4">
               <p className="mb-1.5 px-3 text-xs font-semibold uppercase tracking-wider text-slate-400">

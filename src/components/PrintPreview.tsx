@@ -21,7 +21,7 @@ interface PrintPreviewProps {
 
 /**
  * Shows an on-screen print preview. Print opens the OS dialog.
- * Save as PDF uses Electron printToPDF, or the print dialog in the browser.
+ * Save as PDF uses Electron printToPDF, or unclipped direct download / print in browser.
  */
 export function PrintPreview({
   open,
@@ -51,7 +51,7 @@ export function PrintPreview({
   const handleDirectPrint = async () => {
     setSaving(true);
     try {
-      await triggerSilentPrint({ halfPage });
+      await triggerSilentPrint({ halfPage, fileName });
     } finally {
       setSaving(false);
     }
@@ -82,8 +82,8 @@ export function PrintPreview({
       title={title}
       size={size}
       footer={
-        <div className="flex items-center justify-end gap-2 w-full">
-          <Button variant="outline" size="sm" onClick={onClose} className="flex-1 sm:flex-initial text-xs sm:text-sm">
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 w-full">
+          <Button variant="outline" size="sm" onClick={onClose} className="text-xs sm:text-sm">
             Cancel
           </Button>
           <Button
@@ -92,18 +92,20 @@ export function PrintPreview({
             icon={<FileDown size={15} />}
             onClick={() => void handleSavePdf()}
             disabled={saving}
-            className="flex-1 sm:flex-initial text-xs sm:text-sm whitespace-nowrap"
+            className="text-xs sm:text-sm whitespace-nowrap"
+            title="Download PDF directly to your device"
           >
-            {saving ? 'Saving…' : 'Save as PDF'}
+            {saving ? 'Generating…' : 'Direct Download PDF'}
           </Button>
           <Button
             size="sm"
             icon={<Printer size={15} />}
             onClick={() => void handleDirectPrint()}
             disabled={saving}
-            className="flex-1 sm:flex-initial text-xs sm:text-sm whitespace-nowrap"
+            className="text-xs sm:text-sm whitespace-nowrap bg-indigo-600 hover:bg-indigo-700 text-white font-medium"
+            title="Save as PDF or Print using browser print dialog (Crisp Vector Quality & No Insecure Warnings)"
           >
-            {saving ? 'Printing…' : 'Print'}
+            {saving ? 'Opening…' : 'Print / Save as PDF'}
           </Button>
         </div>
       }
@@ -111,12 +113,14 @@ export function PrintPreview({
       <div
         id="print-preview-content"
         className={cn(
-          "print-document max-h-[72vh] overflow-x-auto overflow-y-auto rounded-xl border border-slate-200/80 bg-slate-100/70 p-1.5 sm:p-4 print:max-h-none print:overflow-visible print:border-0 print:p-0 print:bg-transparent",
+          "max-h-[72vh] overflow-x-auto overflow-y-auto rounded-xl border border-slate-200/80 bg-slate-100/70 p-2 sm:p-5 print:max-h-none print:overflow-visible print:border-0 print:p-0 print:bg-transparent",
           halfPage ? "half-page-print" : ""
         )}
       >
-        <div className="min-w-fit w-full flex justify-start sm:justify-center">
-          {children}
+        <div className="w-full flex justify-center">
+          <div className="print-document-sheet w-full max-w-4xl">
+            {children}
+          </div>
         </div>
       </div>
     </Modal>

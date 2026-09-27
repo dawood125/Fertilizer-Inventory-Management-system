@@ -188,7 +188,7 @@ export function Deliveries() {
                 Mark Delivered
               </Button>
             )}
-            <Button size="sm" variant="outline" icon={<Printer size={15} />} onClick={() => void triggerSilentPrint()} className="flex-1 sm:flex-initial">
+            <Button size="sm" variant="outline" icon={<Printer size={15} />} onClick={() => void triggerSilentPrint({ fileName: `delivery_challan_${viewing?.challan_number || 'slip'}.pdf` })} className="flex-1 sm:flex-initial">
               Print
             </Button>
             <Button size="sm" onClick={() => setViewing(null)} className="flex-1 sm:flex-initial">

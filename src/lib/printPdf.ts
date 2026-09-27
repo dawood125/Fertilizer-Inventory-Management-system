@@ -18,12 +18,34 @@ declare global {
 }
 
 /**
- * Activate print-mode on the page: hides everything except a cloned copy of the
- * `.invoice-card` (or `#print-preview-content` / `.print-document`) content.
+ * Returns the cleanest inner document element to print or capture,
+ * avoiding the modal's outer scroll containers, padding, and grey borders.
  */
-function enterPrintMode(options?: { halfPage?: boolean }): (() => void) | null {
-  const sourceEl = document.querySelector('.invoice-card') || document.querySelector('#print-preview-content') || document.querySelector('.print-document');
+export function getTargetPrintElement(): HTMLElement | null {
+  return (
+    document.querySelector('#print-preview-content .print-document-sheet') ||
+    document.querySelector('#print-preview-content .print-document') ||
+    document.querySelector('#print-preview-content .invoice-card') ||
+    document.querySelector('.print-document-sheet') ||
+    document.querySelector('.print-document') ||
+    document.querySelector('.invoice-card') ||
+    document.querySelector('#print-preview-content')
+  ) as HTMLElement | null;
+}
+
+/**
+ * Activate print-mode on the page: hides everything except a cloned copy of the
+ * clean document sheet. Also temporarily sets document.title so browser print-to-PDF
+ * automatically defaults to the suggested filename.
+ */
+function enterPrintMode(options?: { halfPage?: boolean; fileName?: string }): (() => void) | null {
+  const sourceEl = getTargetPrintElement();
   if (!sourceEl) return null;
+
+  const originalTitle = document.title;
+  if (options?.fileName) {
+    document.title = sanitizePdfName(options.fileName.replace(/\.pdf$/i, ''));
+  }
 
   // Create a full-page overlay with ONLY the document content
   const overlay = document.createElement('div');
@@ -39,14 +61,15 @@ function enterPrintMode(options?: { halfPage?: boolean }): (() => void) | null {
     box-sizing: border-box;
   `;
 
-  // Clone the print document content
+  // Clone the clean print document content
   const clone = sourceEl.cloneNode(true) as HTMLElement;
-  // Remove any max-height / overflow constraints from the clone and ensure strict 0 margins/paddings
   clone.style.setProperty('max-height', 'none', 'important');
   clone.style.setProperty('overflow', 'visible', 'important');
   clone.style.setProperty('border', 'none', 'important');
   clone.style.setProperty('border-radius', '0', 'important');
   clone.style.setProperty('box-shadow', 'none', 'important');
+  clone.style.setProperty('margin', '0 auto', 'important');
+  clone.style.setProperty('width', '100%', 'important');
   overlay.appendChild(clone);
 
   // Add class to body to hide everything else
@@ -60,11 +83,12 @@ function enterPrintMode(options?: { halfPage?: boolean }): (() => void) | null {
     document.body.classList.remove('pdf-capture-mode');
     document.body.classList.remove('half-page-receipt');
     overlay.remove();
+    document.title = originalTitle;
   };
 }
 
-/** Open the OS print dialog using the clean overlay mode. */
-export async function triggerPrint(options?: { halfPage?: boolean }): Promise<void> {
+/** Open the OS print dialog using the clean overlay mode with preset filename. */
+export async function triggerPrint(options?: { halfPage?: boolean; fileName?: string }): Promise<void> {
   const cleanup = enterPrintMode(options);
   // Allow DOM to paint the overlay
   await new Promise((r) => setTimeout(r, 200));
@@ -94,10 +118,10 @@ export async function triggerPrint(options?: { halfPage?: boolean }): Promise<vo
 
 /**
  * Silent print — sends directly to the default printer without showing
- * a printer selection dialog. Falls back to triggerPrint in browser mode.
+ * a printer selection dialog in Electron. Falls back to triggerPrint in browser mode.
  * Pass halfPage=true for invoice receipts so the page size matches the receipt.
  */
-export async function triggerSilentPrint(options?: { halfPage?: boolean }): Promise<'printed' | 'error'> {
+export async function triggerSilentPrint(options?: { halfPage?: boolean; fileName?: string }): Promise<'printed' | 'error'> {
   if (window.electronAPI?.silentPrint) {
     const cleanup = enterPrintMode(options);
     await new Promise((r) => setTimeout(r, 200));
@@ -108,12 +132,15 @@ export async function triggerSilentPrint(options?: { halfPage?: boolean }): Prom
       cleanup?.();
     }
   }
-  // Browser fallback — open normal print dialog
+  // Browser fallback — open native print dialog with preset filename
   await triggerPrint(options);
   return 'printed';
 }
 
-/** Save the current print view as a PDF (Electron) or open the print dialog (browser). */
+/**
+ * Save the current print view as a PDF (Electron) or direct/print PDF in the browser.
+ * Uses an offscreen A4 sandbox container to completely eliminate left/right text clipping.
+ */
 export async function savePrintPdf(
   fileName: string,
   options?: { halfPage?: boolean }
@@ -122,7 +149,7 @@ export async function savePrintPdf(
   try {
     if (window.electronAPI?.savePdf) {
       // Enter print mode — show only the document
-      const cleanup = enterPrintMode(options);
+      const cleanup = enterPrintMode({ ...options, fileName: suggested });
 
       // Give the browser a moment to paint the overlay
       await new Promise((r) => setTimeout(r, 200));
@@ -133,55 +160,104 @@ export async function savePrintPdf(
         if (res.ok) return 'saved';
         console.warn('[savePrintPdf] electronAPI.savePdf returned not ok:', res.error);
       } finally {
-        // Always restore the page
         cleanup?.();
       }
     }
   } catch (err) {
     console.warn('[savePrintPdf] electronAPI.savePdf threw exception:', err);
   }
-  
-  // Browser mode: directly generate and download PDF file to computer
+
+  // Browser mode: directly generate and download PDF file to computer via offscreen sandbox
   try {
-    const sourceEl = (
-      document.querySelector('.invoice-card') ||
-      document.querySelector('#print-preview-content') ||
-      document.querySelector('.print-document')
-    ) as HTMLElement | null;
+    const sourceEl = getTargetPrintElement();
 
     if (sourceEl) {
       // @ts-ignore - html2pdf.js module typing
       const html2pdfModule = await import('html2pdf.js');
       const html2pdf = html2pdfModule.default || html2pdfModule;
 
-      const opt: any = {
-        margin: options?.halfPage ? [3, 4, 3, 4] : [5, 6, 5, 6],
-        filename: suggested,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: {
-          scale: 3, // 300 DPI high resolution
-          useCORS: true,
-          logging: false,
-          letterRendering: true,
-          scrollX: 0,
-          scrollY: 0,
-        },
-        jsPDF: {
-          unit: 'mm',
-          format: options?.halfPage ? 'a5' : 'a4',
-          orientation: 'portrait',
-        },
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
-      };
-      await (html2pdf() as any).set(opt).from(sourceEl).save();
-      return 'saved';
+      // Sandbox container placed off-screen, completely detached from modal styling,
+      // scrolls, flex centering, or overflow clipping.
+      const sandboxWidth = options?.halfPage ? 560 : 794; // 794px = standard A4 @ 96 DPI
+      const sandbox = document.createElement('div');
+      sandbox.id = 'pdf-sandbox-container';
+      sandbox.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: -9999px;
+        width: ${sandboxWidth}px;
+        background: #ffffff;
+        margin: 0;
+        padding: ${options?.halfPage ? '10px' : '20px'};
+        box-sizing: border-box;
+        z-index: -10000;
+        overflow: visible;
+      `;
+
+      // Deep clone the clean document sheet
+      const clone = sourceEl.cloneNode(true) as HTMLElement;
+      clone.style.setProperty('width', '100%', 'important');
+      clone.style.setProperty('max-width', '100%', 'important');
+      clone.style.setProperty('min-width', '0', 'important');
+      clone.style.setProperty('margin', '0', 'important');
+      clone.style.setProperty('border', 'none', 'important');
+      clone.style.setProperty('border-radius', '0', 'important');
+      clone.style.setProperty('box-shadow', 'none', 'important');
+      clone.style.setProperty('max-height', 'none', 'important');
+      clone.style.setProperty('overflow', 'visible', 'important');
+
+      sandbox.appendChild(clone);
+      document.body.appendChild(sandbox);
+
+      try {
+        const opt: any = {
+          margin: options?.halfPage ? [4, 4, 4, 4] : [6, 6, 6, 6],
+          filename: suggested,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: {
+            scale: 2.5,
+            useCORS: true,
+            logging: false,
+            letterRendering: true,
+            scrollX: 0,
+            scrollY: 0,
+            x: 0,
+            y: 0,
+            windowWidth: sandboxWidth,
+          },
+          jsPDF: {
+            unit: 'mm',
+            format: options?.halfPage ? 'a5' : 'a4',
+            orientation: 'portrait',
+          },
+          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+        };
+
+        const worker = (html2pdf() as any).set(opt).from(clone);
+
+        try {
+          await worker.save();
+          return 'saved';
+        } catch (downloadErr) {
+          console.warn('[savePrintPdf] worker.save() failed or restricted by browser, opening in new tab:', downloadErr);
+          const blob = await worker.output('blob');
+          if (blob) {
+            const blobUrl = URL.createObjectURL(blob);
+            window.open(blobUrl, '_blank');
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+            return 'saved';
+          }
+        }
+      } finally {
+        sandbox.remove();
+      }
     }
   } catch (err) {
     console.warn('[savePrintPdf] Direct browser PDF generation failed, falling back to print dialog:', err);
   }
 
   // Fallback if direct download fails
-  await triggerPrint(options);
+  await triggerPrint({ ...options, fileName: suggested });
   return 'printed';
 }
 

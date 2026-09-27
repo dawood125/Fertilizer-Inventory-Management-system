@@ -27,7 +27,7 @@ export function PrintDocument({
   const effectiveLogo = logoSrc || defaultBusinessLogo;
 
   return (
-    <div className="print-document text-left text-sm text-slate-800 bg-white p-3.5 sm:p-6 rounded-xl border border-slate-200/80 shadow-xs min-w-[580px] sm:min-w-[620px] md:min-w-0 max-w-4xl mx-auto box-border">
+    <div className="print-document print-document-sheet text-left text-sm text-slate-800 bg-white p-4 sm:p-6 rounded-xl border border-slate-200/80 shadow-xs w-full max-w-4xl mx-auto box-border">
       <div className="mb-4 flex flex-col items-center border-b border-slate-200 pb-4 text-center sm:flex-row sm:justify-between sm:text-left">
         <div className="flex items-center gap-3">
           {effectiveLogo && (
@@ -48,7 +48,7 @@ export function PrintDocument({
               className={cn('rounded-lg border border-slate-200 bg-slate-50/50 p-2.5', f.span === 2 && 'sm:col-span-2')}
             >
               <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{f.label}</p>
-              <p className="mt-0.5 font-medium text-slate-900 leading-snug">{f.value || '—'}</p>
+              <p className="mt-0.5 font-medium text-slate-900 leading-snug break-words">{f.value || '—'}</p>
             </div>
           ))}
         </div>
@@ -84,7 +84,7 @@ export function PrintTh({
   return (
     <th
       className={cn(
-        'border-b-2 border-slate-200 bg-slate-50 px-2 sm:px-3 py-1.5 sm:py-2.5 text-xs font-semibold text-slate-700 uppercase tracking-wider',
+        'border-b-2 border-slate-200 bg-slate-50 px-2 sm:px-3 py-1.5 sm:py-2.5 text-xs font-semibold text-slate-700 uppercase tracking-wider break-words',
         align === 'right' ? 'text-right' : 'text-left',
         className
       )}
@@ -109,7 +109,7 @@ export function PrintTd({
     <td
       colSpan={colSpan}
       className={cn(
-        'border-b border-slate-100 px-2 sm:px-3 py-1.5 sm:py-2.5 text-xs sm:text-[13px] text-slate-700',
+        'border-b border-slate-100 px-2 sm:px-3 py-1.5 sm:py-2.5 text-xs sm:text-[13px] text-slate-700 break-words',
         align === 'right' ? 'text-right' : 'text-left',
         className
       )}

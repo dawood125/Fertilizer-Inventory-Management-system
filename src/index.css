@@ -97,7 +97,8 @@ body.pdf-capture-mode #pdf-print-overlay {
    ============================================================ */
 @media print {
   @page {
-    margin: 0 !important;
+    margin: 6mm !important;
+    size: auto;
   }
 
   html, body {
@@ -114,8 +115,9 @@ body.pdf-capture-mode #pdf-print-overlay {
     position: static !important;
     inset: auto !important;
     width: 100% !important;
+    max-width: 100% !important;
     height: auto !important;
-    margin: 0 !important;
+    margin: 0 auto !important;
     padding: 0 !important;
     overflow: visible !important;
     display: block !important;
@@ -165,22 +167,32 @@ body.pdf-capture-mode #pdf-print-overlay {
 
   /* Remove modal body scroll constraint */
   .fixed.inset-0.z-50 .max-h-\[calc\(100vh-16rem\)\],
-  .fixed.inset-0.z-50 .max-h-\[70vh\] {
+  .fixed.inset-0.z-50 .max-h-\[70vh\],
+  .fixed.inset-0.z-50 .max-h-\[72vh\] {
     max-height: none !important;
     overflow: visible !important;
   }
 
   /* Print document fills the page */
   .print-document,
+  .print-document-sheet,
   .print-area {
     display: block !important;
     width: 100% !important;
+    max-width: 100% !important;
     max-height: none !important;
     overflow: visible !important;
     box-shadow: none !important;
     border: none !important;
     padding: 0 !important;
+    margin: 0 auto !important;
     border-radius: 0 !important;
+  }
+
+  /* Avoid row breaks inside tables */
+  tr, .print-document table tr {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 
   .data-table thead th {
