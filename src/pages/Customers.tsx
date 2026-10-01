@@ -146,10 +146,20 @@ export function Customers() {
     try {
       const { routes: _r, sales_reps: _s, ...clean } = data;
       const openingDue = Math.max(0, Number(clean.opening_balance || 0));
+
+      let currentBalance = 0;
+      if (editing) {
+        const oldOpening = Math.max(0, Number(editing.opening_balance || 0));
+        const delta = openingDue - oldOpening;
+        currentBalance = Number(editing.balance || 0) + delta;
+      } else {
+        currentBalance = openingDue;
+      }
+
       const payload = {
         ...clean,
         opening_balance: openingDue,
-        balance: !editing ? openingDue : (clean.balance ?? openingDue),
+        balance: currentBalance,
         route_id: clean.route_id || null,
         sales_rep_id: clean.sales_rep_id || null,
       };
@@ -167,6 +177,9 @@ export function Customers() {
             order_number: orderNum,
             invoice_number: invNum,
             customer_id: createdCustomer.id,
+            customer_name: createdCustomer.name || clean.name,
+            customer_phone: createdCustomer.phone || clean.phone || null,
+            customer_area: createdCustomer.area || clean.area || null,
             subtotal: openingDue,
             discount: 0,
             tax: 0,
@@ -703,35 +716,37 @@ function CustomerForm({
         </div>
 
         {/* Previous Pending Balance (Opening Due) with clear explanation */}
-        {!editing ? (
-          <div className="rounded-xl border border-sky-200 bg-sky-50/70 p-3.5 space-y-1.5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-              <span className="text-sm font-semibold text-sky-900">
-                Previous Pending Balance (Opening Due)
+        {/* Previous Pending Balance (Opening Due) with clear explanation */}
+        <div className="rounded-xl border border-sky-200 bg-sky-50/70 p-3.5 space-y-1.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+            <span className="text-sm font-semibold text-sky-900">
+              {editing ? 'Opening Balance (Initial Due)' : 'Previous Pending Balance (Opening Due)'}
+            </span>
+            {editing ? (
+              <span className="text-xs font-bold text-slate-700 bg-white px-2.5 py-0.5 rounded-full border border-slate-200 self-start sm:self-auto">
+                Live Balance: {formatCurrency(editing.balance || 0, symbol)}
               </span>
-              {Number(form.opening_balance || 0) > 0 && (
+            ) : (
+              Number(form.opening_balance || 0) > 0 && (
                 <span className="text-xs font-bold text-sky-700 bg-sky-100 px-2.5 py-0.5 rounded-full self-start sm:self-auto">
                   Initial Pending Invoice: {formatCurrency(Number(form.opening_balance || 0), symbol)}
                 </span>
-              )}
-            </div>
-            <p className="text-xs text-sky-700">
-              If this customer already owes previous pending payments, enter the amount here. An initial invoice will automatically appear in <strong>Pending Payments</strong> so you can collect payments against it.
-            </p>
-            <Input
-              type="number"
-              value={form.opening_balance || ''}
-              onChange={(e) => setForm({ ...form, opening_balance: Number(e.target.value) })}
-              placeholder="e.g. 15000 (leave 0 if customer has no previous balance)"
-              className="bg-white"
-            />
+              )
+            )}
           </div>
-        ) : (
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 flex flex-col sm:flex-row gap-1 justify-between items-start sm:items-center">
-            <span>Current Outstanding Balance: <strong>{formatCurrency(editing.balance || 0, symbol)}</strong></span>
-            <span>Recorded Opening Balance: <strong>{formatCurrency(editing.opening_balance || 0, symbol)}</strong></span>
-          </div>
-        )}
+          <p className="text-xs text-sky-700">
+            {editing
+              ? 'Changing the opening balance will automatically adjust the customer\'s live balance by the difference.'
+              : 'If this customer already owes previous pending payments, enter the amount here. An initial invoice will automatically appear in Pending Payments so you can collect payments against it.'}
+          </p>
+          <Input
+            type="number"
+            value={form.opening_balance || ''}
+            onChange={(e) => setForm({ ...form, opening_balance: Number(e.target.value) })}
+            placeholder="e.g. 15000 (leave 0 if customer has no previous balance)"
+            className="bg-white"
+          />
+        </div>
 
         <div className="rounded-xl bg-amber-50 p-3 ring-1 ring-amber-200">
           <p className="mb-1 text-sm font-semibold text-amber-800">Pricing Tier Configuration</p>

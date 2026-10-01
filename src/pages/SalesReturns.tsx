@@ -7,6 +7,9 @@ import { Button } from '@/components/Button';
 import { Field, Input, Select, Textarea, SearchableSelect } from '@/components/Form';
 import { Card, Badge, Spinner, PageHeader, EmptyState } from '@/components/ui';
 import { Modal } from '@/components/Modal';
+import { PrintPreview } from '@/components/PrintPreview';
+import { SalesReturnDocument } from '@/components/SalesReturnDocument';
+import { sanitizePdfName } from '@/lib/printPdf';
 import { logAuditAction } from '@/lib/audit';
 import { formatCurrency, formatDate, formatDateTime, cn, generateDocNumber } from '@/lib/utils';
 import { returnStockBatch } from '@/lib/fifo';
@@ -55,7 +58,7 @@ interface ReturnItemPayload {
 }
 
 export function SalesReturns() {
-  const { symbol } = useSettings();
+  const { symbol, settings, logoSrc } = useSettings();
   const { user } = useAuth();
   const { notify } = useToast();
   const [items, setItems] = useState<any[]>([]);
@@ -73,6 +76,8 @@ export function SalesReturns() {
   const [dateFilter, setDateFilter] = useState<DateFilterValue>({ preset: 'all' });
   const [isCreatingReturn, setIsCreatingReturn] = useState(false);
   const isCreatingReturnRef = useRef(false);
+  const [printReturnData, setPrintReturnData] = useState<any>(null);
+  const [showPrintPreview, setShowPrintPreview] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -140,6 +145,50 @@ export function SalesReturns() {
     }
   }, [orders]);
 
+  const handlePrintReturn = (returnItem: any) => {
+    const relatedOrder = orders.find((o) => o.id === returnItem.order_id);
+    const relatedCustomer = customers.find((c) => c.id === returnItem.customer_id);
+
+    // If there are other returns with the same return_number (or same order_id created at the same time), group them:
+    const siblingItems = items.filter(
+      (it) => it.return_number === returnItem.return_number || (it.order_id === returnItem.order_id && it.created_at === returnItem.created_at)
+    );
+
+    const docItems = siblingItems.length > 0 ? siblingItems : [returnItem];
+    const totalReturnAmt = docItems.reduce((s, it) => s + Number(it.total_amount || 0), 0);
+    const origTotal = Number(relatedOrder?.total || 0) + (returnItem.status === 'approved' ? totalReturnAmt : 0);
+
+    setPrintReturnData({
+      returnNumber: returnItem.return_number,
+      returnDate: returnItem.created_at,
+      resolution: returnItem.resolution,
+      status: returnItem.status,
+      originalOrderNumber: relatedOrder?.order_number,
+      originalInvoiceNumber: relatedOrder?.invoice_number,
+      originalOrderDate: relatedOrder?.created_at,
+      originalOrderTotal: origTotal,
+      customerName: relatedCustomer?.name || returnItem.customers?.name || 'Walk-in Customer',
+      customerPhone: relatedCustomer?.phone || returnItem.customers?.phone,
+      customerArea: relatedCustomer?.area || returnItem.customers?.area,
+      customerAddress: relatedCustomer?.address,
+      customerNtn: relatedCustomer?.ntn,
+      previousBalance: relatedCustomer ? Number(relatedCustomer.balance || 0) + (returnItem.status === 'approved' && returnItem.resolution === 'credit_note' ? totalReturnAmt : 0) : undefined,
+      currentBalance: relatedCustomer ? Number(relatedCustomer.balance || 0) : undefined,
+      items: docItems.map((it) => ({
+        id: it.id,
+        product_name: it.product_name,
+        quantity: it.quantity,
+        unit_price: it.unit_price,
+        total_amount: it.total_amount,
+        unit: it.unit || 'Carton',
+        reason: it.reason,
+      })),
+      totalReturnAmount: totalReturnAmt,
+      revisedOrderTotal: Math.max(0, origTotal - totalReturnAmt),
+    });
+    setShowPrintPreview(true);
+  };
+
   const createBatch = async (data: {
     order_id: string;
     customer_id: string | null;
@@ -158,10 +207,11 @@ export function SalesReturns() {
       const custName = data.customer_id ? customers.find((c) => c.id === data.customer_id)?.name : 'Walk-in Customer';
       const grandTotal = data.items.reduce((s, it) => s + Number(it.total_amount || 0), 0);
       const totalCartons = data.items.reduce((s, it) => s + Number(it.quantity || 0), 0);
+      const batchReturnNumber = generateDocNumber('SR');
 
       // 1. Process each returned product item
       for (const it of data.items) {
-        const retNum = generateDocNumber('SR');
+        const retNum = batchReturnNumber;
         const returnRecord = await api.post<any>('/api/data/sales_returns', {
           return_number: retNum,
           order_id: data.order_id || null,
@@ -294,6 +344,40 @@ export function SalesReturns() {
       setShowForm(false);
       setInitialOrderId('');
       await load();
+
+      const selectedCust = data.customer_id ? customers.find((c) => c.id === data.customer_id) : null;
+      const prevCustBal = Number(selectedCust?.balance || 0);
+      const updatedCustBal = prevCustBal - grandTotal;
+      const origOrderTotal = Number(order?.total || 0);
+
+      setPrintReturnData({
+        returnNumber: batchReturnNumber,
+        returnDate: new Date().toISOString(),
+        resolution: data.resolution,
+        status: data.status || 'approved',
+        originalOrderNumber: order?.order_number,
+        originalInvoiceNumber: order?.invoice_number,
+        originalOrderDate: order?.created_at,
+        originalOrderTotal: origOrderTotal,
+        customerName: selectedCust?.name || 'Walk-in Customer',
+        customerPhone: selectedCust?.phone,
+        customerArea: selectedCust?.area,
+        customerAddress: selectedCust?.address,
+        customerNtn: selectedCust?.ntn,
+        previousBalance: selectedCust ? prevCustBal : undefined,
+        currentBalance: selectedCust ? (data.resolution === 'credit_note' ? updatedCustBal : prevCustBal) : undefined,
+        items: data.items.map((it: any) => ({
+          product_name: it.product_name,
+          quantity: it.quantity,
+          unit_price: it.unit_price,
+          total_amount: it.total_amount,
+          unit: it.unit || 'Carton',
+          reason: it.reason,
+        })),
+        totalReturnAmount: grandTotal,
+        revisedOrderTotal: Math.max(0, origOrderTotal - grandTotal),
+      });
+      setShowPrintPreview(true);
     } catch (err: any) {
       notify(err?.message || 'Failed to create returns', 'error');
     } finally {
@@ -542,6 +626,13 @@ export function SalesReturns() {
                     <td>
                       <div className="flex justify-end gap-1">
                         <button
+                          onClick={() => handlePrintReturn(r)}
+                          className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                          title="Print Return Invoice / Credit Note"
+                        >
+                          <Printer size={16} />
+                        </button>
+                        <button
                           onClick={() => setViewing(r)}
                           className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
                           title="View Details"
@@ -598,8 +689,15 @@ export function SalesReturns() {
                 </Button>
               </>
             )}
-            <Button variant="outline" onClick={() => window.print()} icon={<Printer size={16} />}>
-              Print Slip
+            <Button
+              variant="outline"
+              onClick={() => {
+                handlePrintReturn(viewing);
+                setViewing(null);
+              }}
+              icon={<Printer size={16} />}
+            >
+              Print Return Invoice
             </Button>
             <Button onClick={() => setViewing(null)}>Close</Button>
           </>
@@ -673,6 +771,45 @@ export function SalesReturns() {
           </div>
         )}
       </Modal>
+
+      {/* Sales Return Document Print Preview Modal */}
+      {showPrintPreview && printReturnData && (
+        <PrintPreview
+          open={showPrintPreview}
+          onClose={() => setShowPrintPreview(false)}
+          title={`Credit Note / Sales Return — ${printReturnData.returnNumber}`}
+          size="lg"
+          fileName={`sales_return_${sanitizePdfName(printReturnData.returnNumber)}.pdf`}
+        >
+          <SalesReturnDocument
+            storeName={settings?.store_name || 'SAEED AND CO'}
+            phone={settings?.phone}
+            address={settings?.address}
+            ntn={settings?.ntn}
+            logoSrc={logoSrc}
+            symbol={symbol}
+            returnNumber={printReturnData.returnNumber}
+            returnDate={printReturnData.returnDate}
+            resolution={printReturnData.resolution}
+            status={printReturnData.status}
+            originalOrderNumber={printReturnData.originalOrderNumber}
+            originalInvoiceNumber={printReturnData.originalInvoiceNumber}
+            originalOrderDate={printReturnData.originalOrderDate}
+            originalOrderTotal={printReturnData.originalOrderTotal}
+            customerName={printReturnData.customerName}
+            customerPhone={printReturnData.customerPhone}
+            customerArea={printReturnData.customerArea}
+            customerAddress={printReturnData.customerAddress}
+            customerNtn={printReturnData.customerNtn}
+            previousBalance={printReturnData.previousBalance}
+            currentBalance={printReturnData.currentBalance}
+            items={printReturnData.items}
+            totalReturnAmount={printReturnData.totalReturnAmount}
+            revisedOrderTotal={printReturnData.revisedOrderTotal}
+            paperSize="A5"
+          />
+        </PrintPreview>
+      )}
     </div>
   );
 }

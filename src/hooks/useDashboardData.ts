@@ -48,6 +48,17 @@ export interface RecentActivity {
   stockAlerts: any[];
 }
 
+export interface OverdueCustomer {
+  customerId: string;
+  customerName: string;
+  phone: string;
+  area: string;
+  orderNumber: string;
+  dueDate: string;
+  unpaidAmount: number;
+  daysOverdue: number;
+}
+
 const emptyStats: DashboardStats = {
   todaySales: 0,
   monthlySales: 0,
@@ -73,6 +84,7 @@ export function useDashboardData() {
   const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
   const [categorySales, setCategorySales] = useState<CategorySales[]>([]);
   const [recentActivity, setRecentActivity] = useState<RecentActivity | null>(null);
+  const [overdueCustomers, setOverdueCustomers] = useState<OverdueCustomer[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchAll = useCallback(async () => {
@@ -299,6 +311,30 @@ export function useDashboardData() {
           .slice(0, 5),
         stockAlerts: [...lowStock, ...outOfStock].slice(0, 5),
       });
+
+      // Calculate Overdue Credit Invoices (Bug #24)
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const overdueList: OverdueCustomer[] = [];
+      const custMap = new Map((customers || []).map((c: any) => [c.id, c]));
+
+      tradeOrders.forEach((o: any) => {
+        const unpaid = Number(o.total || 0) - Number(o.paid_amount || 0);
+        if (o.due_date && o.payment_status !== 'paid' && unpaid > 0 && o.due_date < todayStr) {
+          const cust = o.customer_id ? custMap.get(o.customer_id) : null;
+          const daysOverdue = Math.max(1, Math.floor((Date.now() - new Date(o.due_date).getTime()) / 86400000));
+          overdueList.push({
+            customerId: o.customer_id || '',
+            customerName: cust?.name || o.customer_name || 'Walk-in Customer',
+            phone: cust?.phone || o.customer_phone || '',
+            area: cust?.area || o.customer_area || '',
+            orderNumber: o.order_number,
+            dueDate: o.due_date,
+            unpaidAmount: unpaid,
+            daysOverdue,
+          });
+        }
+      });
+      setOverdueCustomers(overdueList.sort((a, b) => b.daysOverdue - a.daysOverdue));
     } catch {
       setStats(emptyStats);
       setSalesData([]);
@@ -311,6 +347,7 @@ export function useDashboardData() {
         transactions: [],
         stockAlerts: [],
       });
+      setOverdueCustomers([]);
     } finally {
       setLoading(false);
     }
@@ -320,5 +357,5 @@ export function useDashboardData() {
     fetchAll();
   }, [fetchAll]);
 
-  return { stats, salesData, topProducts, categorySales, recentActivity, loading, refetch: fetchAll };
+  return { stats, salesData, topProducts, categorySales, recentActivity, overdueCustomers, loading, refetch: fetchAll };
 }

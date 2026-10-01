@@ -1,3 +1,4 @@
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useHashRoute } from '@/lib/router';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { SettingsProvider } from '@/context/SettingsContext';
@@ -83,13 +84,15 @@ function Router() {
 
 function App() {
   return (
-    <AuthProvider>
-      <SettingsProvider>
-        <ToastProvider>
-          <Router />
-        </ToastProvider>
-      </SettingsProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <SettingsProvider>
+          <ToastProvider>
+            <Router />
+          </ToastProvider>
+        </SettingsProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

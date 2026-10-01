@@ -58,6 +58,7 @@ interface CartItem {
   unitPrice: number;
   discount: number;
   freeItems: number;
+  isCustomPrice?: boolean;
 }
 
 const PAGE_SIZE = 40;
@@ -87,6 +88,7 @@ export function POS({ navigate: _navigate }: { navigate: (path: string) => void 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [paymentType, setPaymentType] = useState<PaymentType>('full');
   const [paidAmount, setPaidAmount] = useState(0);
+  const [dueDate, setDueDate] = useState<string>('');
   const [heldOrders, setHeldOrders] = useState<any[]>([]);
   const [showHeld, setShowHeld] = useState(false);
   const [lastReceipt, setLastReceipt] = useState<any>(null);
@@ -219,19 +221,23 @@ export function POS({ navigate: _navigate }: { navigate: (path: string) => void 
       setPriceType(pt);
       setCart((prev) => prev.map((c) => ({
         ...c,
-        unitPrice: priceForUnit(
-          c.product,
-          pt,
-          c.unit,
-          selectedCustomer.custom_price || 0,
-          customerPrices[c.product.id]?.unit_price
-        ),
+        unitPrice: c.isCustomPrice
+          ? c.unitPrice
+          : priceForUnit(
+              c.product,
+              pt,
+              c.unit,
+              selectedCustomer.custom_price || 0,
+              customerPrices[c.product.id]?.unit_price
+            ),
       })));
     } else {
       setPriceType('retail');
       setCart((prev) => prev.map((c) => ({
         ...c,
-        unitPrice: priceForUnit(c.product, 'retail', c.unit, 0, null),
+        unitPrice: c.isCustomPrice
+          ? c.unitPrice
+          : priceForUnit(c.product, 'retail', c.unit, 0, null),
       })));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: reprice on customer/price map change
@@ -245,13 +251,15 @@ export function POS({ navigate: _navigate }: { navigate: (path: string) => void 
     setPriceType(newType);
     setCart((prev) => prev.map((c) => ({
       ...c,
-      unitPrice: priceForUnit(
-        c.product,
-        newType,
-        c.unit,
-        selectedCustomer?.custom_price || 0,
-        customerPrices[c.product.id]?.unit_price
-      ),
+      unitPrice: c.isCustomPrice
+        ? c.unitPrice
+        : priceForUnit(
+            c.product,
+            newType,
+            c.unit,
+            selectedCustomer?.custom_price || 0,
+            customerPrices[c.product.id]?.unit_price
+          ),
     })));
   };
 
@@ -364,11 +372,22 @@ export function POS({ navigate: _navigate }: { navigate: (path: string) => void 
     setCart((prev) => prev.map((c) => {
       if (c.product.id !== id) return c;
       const maxQty = stockInUnit(c.product, unit);
+      const packing = piecesPerCarton(c.product);
+      let newPrice = c.unitPrice;
+      if (c.isCustomPrice) {
+        if (c.unit === 'carton' && unit === 'piece') {
+          newPrice = Number((c.unitPrice / packing).toFixed(2));
+        } else if (c.unit === 'piece' && unit === 'carton') {
+          newPrice = Number((c.unitPrice * packing).toFixed(2));
+        }
+      } else {
+        newPrice = resolveUnitPrice(c.product, unit);
+      }
       return {
         ...c,
         unit,
         quantity: Math.min(c.quantity, Math.max(1, maxQty)),
-        unitPrice: resolveUnitPrice(c.product, unit),
+        unitPrice: newPrice,
       };
     }));
   };
@@ -387,7 +406,7 @@ export function POS({ navigate: _navigate }: { navigate: (path: string) => void 
         return;
       }
     }
-    setCart((prev) => prev.map((c) => c.product.id === id ? { ...c, unitPrice: price } : c));
+    setCart((prev) => prev.map((c) => c.product.id === id ? { ...c, unitPrice: price, isCustomPrice: true } : c));
   };
 
   const setLineDiscount = (id: string, disc: number) => {
@@ -432,12 +451,12 @@ export function POS({ navigate: _navigate }: { navigate: (path: string) => void 
     if (cart.length === 0) return;
     try {
       const heldCustomer = selectedCustomer ? { id: selectedCustomer.id, name: selectedCustomer.name, type: selectedCustomer.type, area: selectedCustomer.area, phone: selectedCustomer.phone, balance: selectedCustomer.balance, ntn: selectedCustomer.ntn, credit_limit: selectedCustomer.credit_limit, default_price_type: selectedCustomer.default_price_type } : null;
-      const payload = JSON.stringify({ cart, selectedCustomerId, heldCustomer, discount, taxRate, priceType, paymentMethod, paymentType, paidAmount });
+      const payload = JSON.stringify({ cart, selectedCustomerId, heldCustomer, discount, taxRate, priceType, paymentMethod, paymentType, paidAmount, dueDate });
       const row = await api.post<any>('/api/data/held_orders', { payload });
       let parsed: any = {};
-      try { parsed = JSON.parse(row.payload); } catch { parsed = { cart, selectedCustomerId, heldCustomer, discount, taxRate, priceType, paymentMethod, paymentType, paidAmount }; }
+      try { parsed = JSON.parse(row.payload); } catch { parsed = { cart, selectedCustomerId, heldCustomer, discount, taxRate, priceType, paymentMethod, paymentType, paidAmount, dueDate }; }
       setHeldOrders((prev) => [...prev, { ...row, ...parsed, id: row.id }]);
-      setCart([]); setSelectedCustomerId(''); setDiscount(0); setTaxRate(0); setPaidAmount(0);
+      setCart([]); setSelectedCustomerId(''); setDiscount(0); setTaxRate(0); setPaidAmount(0); setDueDate('');
       setPaymentMethod('cash'); setPaymentType('full');
       notify('Order held. Resume anytime.', 'info');
     } catch (e: any) {
@@ -446,14 +465,58 @@ export function POS({ navigate: _navigate }: { navigate: (path: string) => void 
   };
 
   const resumeOrder = async (held: any) => {
-    setCart(held.cart || []);
+    let freshCustomers = customers;
+    try {
+      const latestCusts = await api.get<Customer[]>('/api/data/customers');
+      if (latestCusts && Array.isArray(latestCusts)) {
+        setCustomers(latestCusts);
+        freshCustomers = latestCusts;
+      }
+    } catch {}
+
+    let freshProducts = products;
+    try {
+      const latestProds = await api.get<Product[]>('/api/data/products?limit=10000');
+      if (latestProds && Array.isArray(latestProds)) {
+        setProducts(latestProds);
+        freshProducts = latestProds;
+      }
+    } catch {}
+
+    const prodMap = new Map(freshProducts.map((p) => [p.id, p]));
+    const targetCust = freshCustomers.find((c) => c.id === held.selectedCustomerId);
+    const pt: PriceType = held.priceType || 'retail';
+
+    const restoredCart: CartItem[] = (held.cart || []).map((c: any) => {
+      const liveProd = prodMap.get(c.product?.id) || c.product;
+      const packing = piecesPerCarton(liveProd);
+      const standardPrice = priceForUnit(
+        liveProd,
+        pt,
+        c.unit,
+        targetCust?.custom_price || 0,
+        customerPrices[liveProd?.id]?.unit_price
+      );
+      const isCustom = c.isCustomPrice ?? (Number(c.unitPrice) !== Number(standardPrice));
+      const unitPrice = isCustom ? Number(c.unitPrice) : standardPrice;
+
+      return {
+        ...c,
+        product: liveProd,
+        unitPrice,
+        isCustomPrice: isCustom,
+      };
+    });
+
+    setCart(restoredCart);
     setSelectedCustomerId(held.selectedCustomerId || '');
     setDiscount(held.discount || 0);
     setTaxRate(held.taxRate || 0);
-    setPriceType(held.priceType || 'retail');
+    setPriceType(pt);
     setPaymentMethod(held.paymentMethod || 'cash');
     setPaymentType(held.paymentType || 'full');
     setPaidAmount(held.paidAmount || 0);
+    setDueDate(held.dueDate || '');
     setHeldOrders((prev) => prev.filter((h) => h.id !== held.id));
     setShowHeld(false);
     try {
@@ -495,6 +558,10 @@ export function POS({ navigate: _navigate }: { navigate: (path: string) => void 
       notify(`Credit limit exceeded! Limit: ${formatCurrency(selectedCustomer!.credit_limit, symbol)}`, 'error');
       return;
     }
+    if (dueDate && dueDate < new Date().toISOString().slice(0, 10)) {
+      notify('Promise due date cannot be in the past', 'error');
+      return;
+    }
 
     isSubmittingOrderRef.current = true;
     setSubmittingOrder(true);
@@ -507,6 +574,9 @@ export function POS({ navigate: _navigate }: { navigate: (path: string) => void 
         order_number: orderNumber,
         invoice_number: invoiceNumber,
         customer_id: selectedCustomerId || null,
+        customer_name: selectedCustomer?.name || null,
+        customer_phone: selectedCustomer?.phone || null,
+        customer_area: selectedCustomer?.area || null,
         subtotal: subtotalNet,
         discount: orderDiscount + lineDiscountTotal,
         tax: taxAmount,
@@ -514,6 +584,7 @@ export function POS({ navigate: _navigate }: { navigate: (path: string) => void 
         paid_amount: effectivePaid,
         status: 'completed',
         payment_status: paymentStatus,
+        due_date: (paymentType === 'credit' || remaining > 0) && dueDate ? dueDate : null,
         sales_rep_id: selectedCustomer?.sales_rep_id || null,
         route_id: selectedCustomer?.route_id || null,
       });
@@ -615,7 +686,7 @@ export function POS({ navigate: _navigate }: { navigate: (path: string) => void 
         currentBalance: previousBalance + remaining,
       });
       setShowPrintPreview(false);
-      setCart([]); setSelectedCustomerId(''); setDiscount(0); setTaxRate(0); setPaidAmount(0);
+      setCart([]); setSelectedCustomerId(''); setDiscount(0); setTaxRate(0); setPaidAmount(0); setDueDate('');
       notify('Order completed successfully', 'success');
       loadData();
     } catch {
@@ -1019,19 +1090,16 @@ export function POS({ navigate: _navigate }: { navigate: (path: string) => void 
                             <p className="text-[10px] text-slate-400">Avail {stockInUnit(c.product, c.unit)} {c.unit === 'carton' ? 'ctn' : 'pcs'}</p>
                           </td>
                           <td className="px-1 py-2">
-                            <div className="flex items-center justify-center rounded border border-slate-200 bg-white">
-                              <button type="button" onClick={() => updateQty(c.product.id, -1)} className="p-1 text-slate-500 hover:bg-slate-100"><Minus size={11} /></button>
-                              <input
-                                type="number"
-                                min="1"
-                                value={c.quantity === 0 ? '' : c.quantity}
-                                onFocus={(e) => e.target.select()}
-                                onChange={(e) => setQty(c.product.id, e.target.value)}
-                                onBlur={() => handleQtyBlur(c.product.id)}
-                                className="w-8 border-0 bg-transparent p-0 text-center text-xs font-semibold focus:outline-none"
-                              />
-                              <button type="button" onClick={() => updateQty(c.product.id, 1)} className="p-1 text-slate-500 hover:bg-slate-100"><Plus size={11} /></button>
-                            </div>
+                            <input
+                              type="number"
+                              min="0.01"
+                              step="any"
+                              value={c.quantity === 0 ? '' : c.quantity}
+                              onFocus={(e) => e.target.select()}
+                              onChange={(e) => setQty(c.product.id, e.target.value)}
+                              onBlur={() => handleQtyBlur(c.product.id)}
+                              className="w-14 rounded-md border border-slate-300 py-1 text-center text-xs font-bold text-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 focus:outline-none bg-white shadow-2xs"
+                            />
                           </td>
                           <td className="px-1 py-2">
                             <Select value={c.unit} onChange={(e) => setUnit(c.product.id, e.target.value as SaleUnit)} className="w-[4.25rem] py-0.5 text-[11px]">
@@ -1106,6 +1174,18 @@ export function POS({ navigate: _navigate }: { navigate: (path: string) => void 
                 {paymentType === 'advance' && (
                   <Field label="Advance Amount" className="mb-0">
                     <Input type="number" value={paidAmount || ''} onChange={(e) => setPaidAmount(Number(e.target.value))} placeholder="0" className="py-1 text-xs" />
+                  </Field>
+                )}
+
+                {(paymentType === 'credit' || paymentType === 'partial' || remaining > 0) && (
+                  <Field label="Promise Due Date (Optional)" className="mb-0">
+                    <Input
+                      type="date"
+                      min={new Date().toISOString().slice(0, 10)}
+                      value={dueDate}
+                      onChange={(e) => setDueDate(e.target.value)}
+                      className="py-1 text-xs bg-white"
+                    />
                   </Field>
                 )}
 

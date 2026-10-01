@@ -34,6 +34,8 @@ export function runMigrations(db) {
     { name: '012_purchase_item_selling_prices', sql: MIGRATION_012 },
     { name: '013_fertilizer_po_batches', sql: MIGRATION_013 },
     { name: '014_user_permissions_and_po_approval', sql: MIGRATION_014 },
+    { name: '015_preserve_customer_order_snapshot', sql: MIGRATION_015 },
+    { name: '016_order_due_date', sql: MIGRATION_016 },
   ];
 
   for (const m of migrations) {
@@ -577,4 +579,22 @@ const MIGRATION_014 = `
 ALTER TABLE users ADD COLUMN permissions TEXT DEFAULT '[]';
 ALTER TABLE purchase_orders ADD COLUMN requested_by TEXT;
 ALTER TABLE purchase_orders ADD COLUMN approved_by TEXT;
+`;
+
+const MIGRATION_015 = `
+ALTER TABLE orders ADD COLUMN customer_name TEXT;
+ALTER TABLE orders ADD COLUMN customer_phone TEXT;
+ALTER TABLE orders ADD COLUMN customer_area TEXT;
+
+-- Backfill existing orders with customer details
+UPDATE orders 
+SET customer_name = (SELECT name FROM customers WHERE customers.id = orders.customer_id),
+    customer_phone = (SELECT phone FROM customers WHERE customers.id = orders.customer_id),
+    customer_area = (SELECT area FROM customers WHERE customers.id = orders.customer_id)
+WHERE customer_id IS NOT NULL;
+`;
+
+const MIGRATION_016 = `
+ALTER TABLE orders ADD COLUMN due_date TEXT;
+CREATE INDEX IF NOT EXISTS idx_orders_due_date ON orders(due_date);
 `;

@@ -383,6 +383,16 @@ export function SalesInvoiceDocument({
 
         .summary-row.paid { color: #000000; font-weight: 700; }
         .summary-row.remaining { color: #000000; font-weight: 800; }
+        .summary-row.grand-total {
+          font-size: 9.5px;
+          font-weight: 900;
+          color: #000000;
+          border-top: 1.5px solid #000000;
+          padding-top: 2px;
+          margin-top: 1px;
+          background: #f1f5f9;
+          padding: 2px 3px;
+        }
 
         /* RECEIPT FOOTER */
         .receipt-footer {
@@ -673,13 +683,15 @@ export function SalesInvoiceDocument({
                 <span>Total Cartons</span>
                 <strong>{totalCartons.toFixed(2)}</strong>
               </div>
+              {paymentMethod && (
+                <div className="summary-row">
+                  <span>Payment Method</span>
+                  <strong className="capitalize">{paymentMethod}</strong>
+                </div>
+              )}
               <div className="summary-row">
-                <span>Previous Balance</span>
-                <strong>{fmt(previousBalance || 0)}</strong>
-              </div>
-              <div className="summary-row bold">
-                <span>Current Balance</span>
-                <strong>{fmt(currentBalance ?? ((previousBalance || 0) + (remaining || 0)))}</strong>
+                <span>Payment Status</span>
+                <strong>{total <= paidAmount ? 'Full Paid' : paidAmount > 0 ? 'Partial Payment' : 'Credit Sale'}</strong>
               </div>
             </div>
 
@@ -709,8 +721,16 @@ export function SalesInvoiceDocument({
                 <span>{fmt(paidAmount)}</span>
               </div>
               <div className="summary-row remaining">
-                <span>Remaining</span>
+                <span>Remaining Due</span>
                 <span>{fmt(remaining)}</span>
+              </div>
+              <div className="summary-row">
+                <span>Previous Balance</span>
+                <span>{fmt(previousBalance || 0)}</span>
+              </div>
+              <div className="summary-row grand-total">
+                <span>Grand Total</span>
+                <span>{fmt(currentBalance ?? ((previousBalance || 0) + (remaining || 0)))}</span>
               </div>
             </div>
           </section>

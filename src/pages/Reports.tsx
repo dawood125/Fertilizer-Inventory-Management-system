@@ -88,6 +88,7 @@ export function Reports() {
 
   const [customersPage, setCustomersPage] = useState(1);
   const [customersPageSize, setCustomersPageSize] = useState(25);
+  const [customerBalanceSearch, setCustomerBalanceSearch] = useState<string>('');
 
   const [suppliersPage, setSuppliersPage] = useState(1);
   const [suppliersPageSize, setSuppliersPageSize] = useState(25);
@@ -207,6 +208,7 @@ export function Reports() {
         topCustomers: {},
         txByAccount: {},
         selectedLedgerData: null as SalesLedgerData | null,
+        overdueMap: {} as Record<string, { daysOverdue: number; earliestDueDate: string }>,
       };
     }
 
@@ -822,6 +824,36 @@ export function Reports() {
       };
     }
 
+
+    // Overdue Customers Map (Bug #6 & #24)
+    const overdueMap: Record<string, { daysOverdue: number; earliestDueDate: string }> = {};
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+
+    (customersRaw || []).forEach((c: any) => {
+      const balance = Number(c.balance || 0);
+      if (balance <= 0) return;
+
+      const custOrders = (ordersRaw || []).filter(
+        (o: any) => o.customer_id === c.id && o.status !== 'cancelled' && (o.payment_status === 'unpaid' || o.payment_status === 'partial')
+      );
+
+      let earliestDueDate: string | null = null;
+      custOrders.forEach((o: any) => {
+        if (o.due_date && o.due_date < todayStr) {
+          if (!earliestDueDate || o.due_date < earliestDueDate) {
+            earliestDueDate = o.due_date;
+          }
+        }
+      });
+
+      if (earliestDueDate) {
+        const diffMs = now.getTime() - new Date(earliestDueDate).getTime();
+        const daysOverdue = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+        overdueMap[c.id] = { daysOverdue, earliestDueDate };
+      }
+    });
+
     return {
       orders: tradeOrders,
       orderItems: orderItemsList,
@@ -860,6 +892,7 @@ export function Reports() {
       topCustomers,
       txByAccount,
       selectedLedgerData,
+      overdueMap,
     };
   }, [rawPayload, dateFilter, selectedLedgerCustomerId]);
 
@@ -966,7 +999,7 @@ export function Reports() {
     setCustomersPage(1);
     setSuppliersPage(1);
     setLedgerPage(1);
-  }, [dateFilter, activeReport, inventoryBrandFilter, inventoryCategoryFilter, inventorySearch, productProfitSearch]);
+  }, [dateFilter, activeReport, inventoryBrandFilter, inventoryCategoryFilter, inventorySearch, productProfitSearch, customerBalanceSearch]);
 
   const filteredInventoryProducts = useMemo(() => {
     return (data.products || []).filter((p: any) => {
@@ -1022,10 +1055,22 @@ export function Reports() {
     return (data.expenses || []).slice(start, start + expensesPageSize);
   }, [data.expenses, expensesPage, expensesPageSize]);
 
+  const filteredCustomers = useMemo(() => {
+    const q = customerBalanceSearch.trim().toLowerCase();
+    return (data.customers || []).filter((c: any) => {
+      if (!q) return true;
+      return (
+        c.name?.toLowerCase().includes(q) ||
+        c.phone?.toLowerCase().includes(q) ||
+        c.area?.toLowerCase().includes(q)
+      );
+    });
+  }, [data.customers, customerBalanceSearch]);
+
   const paginatedCustomers = useMemo(() => {
     const start = (customersPage - 1) * customersPageSize;
-    return (data.customers || []).slice(start, start + customersPageSize);
-  }, [data.customers, customersPage, customersPageSize]);
+    return filteredCustomers.slice(start, start + customersPageSize);
+  }, [filteredCustomers, customersPage, customersPageSize]);
 
   const paginatedSuppliers = useMemo(() => {
     const start = (suppliersPage - 1) * suppliersPageSize;
@@ -2568,6 +2613,35 @@ export function Reports() {
             </div>
 
             <Card title="Customer Account Balances">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <div className="relative flex-1 min-w-[240px] max-w-sm">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                  <input
+                    type="text"
+                    placeholder="Search by customer name, phone, or area..."
+                    value={customerBalanceSearch}
+                    onChange={(e) => {
+                      setCustomerBalanceSearch(e.target.value);
+                      setCustomersPage(1);
+                    }}
+                    className="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder:text-slate-400"
+                  />
+                </div>
+                {customerBalanceSearch && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setCustomerBalanceSearch('');
+                      setCustomersPage(1);
+                    }}
+                    className="text-xs text-slate-500 hover:text-slate-800"
+                  >
+                    Clear Filter
+                  </Button>
+                )}
+              </div>
+
               <div className="overflow-x-auto">
                 <table className="data-table">
                   <thead>
@@ -2579,28 +2653,41 @@ export function Reports() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(data.customers || []).length === 0 ? (
+                    {filteredCustomers.length === 0 ? (
                       <tr>
                         <td colSpan={4} className="py-8 text-center text-slate-400 text-xs italic">
-                          No customers found.
+                          {customerBalanceSearch ? 'No customers found matching search criteria.' : 'No customers found.'}
                         </td>
                       </tr>
                     ) : (
-                      paginatedCustomers.map((c: any) => (
-                        <tr key={c.id} className="hover:bg-slate-50/80">
-                          <td className="font-semibold text-slate-800">{c.name}</td>
-                          <td className="text-slate-600">{c.area || '—'}</td>
-                          <td className="text-slate-600">{c.phone || '—'}</td>
-                          <td
-                            className={cn(
-                              'text-right font-bold',
-                              Number(c.balance || 0) > 0 ? 'text-rose-600' : 'text-emerald-600'
-                            )}
-                          >
-                            {formatCurrency(c.balance, symbol)}
-                          </td>
-                        </tr>
-                      ))
+                      paginatedCustomers.map((c: any) => {
+                        const overdue = data.overdueMap?.[c.id];
+                        return (
+                          <tr key={c.id} className="hover:bg-slate-50/80">
+                            <td className="font-semibold text-slate-800">
+                              <div className="flex items-center gap-2">
+                                <span>{c.name}</span>
+                                {overdue && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700 ring-1 ring-rose-200/80">
+                                    <AlertTriangle size={11} className="text-rose-600 shrink-0" />
+                                    {overdue.daysOverdue}d Overdue
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="text-slate-600">{c.area || '—'}</td>
+                            <td className="text-slate-600">{c.phone || '—'}</td>
+                            <td
+                              className={cn(
+                                'text-right font-bold',
+                                Number(c.balance || 0) > 0 ? 'text-rose-600' : 'text-emerald-600'
+                              )}
+                            >
+                              {formatCurrency(c.balance, symbol)}
+                            </td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                   {(data.customers || []).length > 0 && (
@@ -2616,11 +2703,11 @@ export function Reports() {
                 </table>
               </div>
 
-              {(data.customers || []).length > customersPageSize && (
+              {filteredCustomers.length > customersPageSize && (
                 <div className="pt-4 border-t border-slate-100">
                   <Pagination
                     currentPage={customersPage}
-                    totalItems={(data.customers || []).length}
+                    totalItems={filteredCustomers.length}
                     pageSize={customersPageSize}
                     onPageChange={setCustomersPage}
                     onPageSizeChange={setCustomersPageSize}
@@ -3144,7 +3231,10 @@ function ReportPrintDocument({
           <tbody>
             {(data.customers || []).map((c: any) => (
               <tr key={c.id}>
-                <PrintTd className="font-medium">{c.name}</PrintTd>
+                <PrintTd className="font-medium">
+                  {c.name}
+                  {data.overdueMap?.[c.id] ? ` (${data.overdueMap[c.id].daysOverdue}d Overdue)` : ''}
+                </PrintTd>
                 <PrintTd>{c.area || '—'}</PrintTd>
                 <PrintTd>{c.phone || '—'}</PrintTd>
                 <PrintTd align="right">{formatCurrency(c.balance, symbol)}</PrintTd>

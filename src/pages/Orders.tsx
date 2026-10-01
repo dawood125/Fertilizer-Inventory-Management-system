@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { api } from '@/lib/api';
 import type { Order, OrderItem, OrderPayment, Product } from '@/lib/types';
 import { useSettings } from '@/context/SettingsContext';
@@ -33,6 +33,7 @@ export function Orders() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [areaFilter, setAreaFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState<DateFilterValue>({ preset: 'all' });
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -50,12 +51,13 @@ export function Orders() {
       const customerMap = new Map((customers || []).map((c) => [c.id, c]));
       setOrders(
         (ordersData || [])
-          .map((o) => ({
-            ...o,
-            customers: o.customer_id
-              ? customerMap.get(o.customer_id) || null
-              : null,
-          }))
+          .map((o) => {
+            const cust = o.customer_id ? customerMap.get(o.customer_id) : null;
+            return {
+              ...o,
+              customers: cust || (o.customer_name ? { name: o.customer_name, phone: o.customer_phone || '', area: o.customer_area || '' } : null),
+            };
+          })
           .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
       );
     } catch {
@@ -69,14 +71,27 @@ export function Orders() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, statusFilter, dateFilter]);
+  }, [search, statusFilter, areaFilter, dateFilter]);
+
+  const uniqueAreas = useMemo(() => {
+    return Array.from(
+      new Set(orders.map((o) => (o.customers?.area || o.customer_area || '').trim()).filter(Boolean))
+    ).sort();
+  }, [orders]);
 
   const filtered = orders.filter((o) => {
     const q = search.toLowerCase();
-    const matchSearch = !q || o.order_number?.toLowerCase().includes(q) || o.customers?.name?.toLowerCase().includes(q);
+    const area = (o.customers?.area || o.customer_area || '').trim();
+    const matchSearch =
+      !q ||
+      o.order_number?.toLowerCase().includes(q) ||
+      o.invoice_number?.toLowerCase().includes(q) ||
+      o.customers?.name?.toLowerCase().includes(q) ||
+      area.toLowerCase().includes(q);
     const matchStatus = statusFilter === 'all' || o.status === statusFilter;
+    const matchArea = areaFilter === 'all' || area.toLowerCase() === areaFilter.toLowerCase();
     const matchDate = isWithinDateRange(o.created_at, dateFilter);
-    return matchSearch && matchStatus && matchDate;
+    return matchSearch && matchStatus && matchArea && matchDate;
   });
 
   const openView = async (order: Order) => {
@@ -177,6 +192,18 @@ export function Orders() {
           <option value="cancelled">Cancelled</option>
           <option value="returned">Returned</option>
         </select>
+        {uniqueAreas.length > 0 && (
+          <select
+            value={areaFilter}
+            onChange={(e) => setAreaFilter(e.target.value)}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:outline-none"
+          >
+            <option value="all">All Areas ({uniqueAreas.length})</option>
+            {uniqueAreas.map((a: string) => (
+              <option key={a} value={a}>{a}</option>
+            ))}
+          </select>
+        )}
         <DateTimeFilter value={dateFilter} onChange={setDateFilter} />
       </div>
 
@@ -198,6 +225,7 @@ export function Orders() {
                   <tr>
                     <th>Order #</th>
                     <th>Customer</th>
+                    <th>Area</th>
                     <th>Date</th>
                     <th>Total</th>
                     <th>Status</th>
@@ -217,6 +245,15 @@ export function Orders() {
                         </div>
                       </td>
                       <td>{o.customers?.name || 'Walk-in'}</td>
+                      <td>
+                        {o.customers?.area || o.customer_area ? (
+                          <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                            {o.customers?.area || o.customer_area}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
+                      </td>
                       <td className="text-slate-500">{formatDateTime(o.created_at)}</td>
                       <td className="font-semibold">{formatCurrency(o.total, symbol)}</td>
                       <td><Badge variant={statusVariant[o.status] || 'gray'}>{o.status}</Badge></td>

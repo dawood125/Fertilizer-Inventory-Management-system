@@ -96,7 +96,11 @@ export interface Order {
   sales_rep_id: string | null;
   route_id: string | null;
   delivery_date: string | null;
+  due_date?: string | null;
   invoice_number: string | null;
+  customer_name?: string | null;
+  customer_phone?: string | null;
+  customer_area?: string | null;
   created_at: string;
 }
 

@@ -218,6 +218,15 @@ function prepareInsert(tableKey, body, { keepId = false } = {}) {
   if (!keepId) delete data.id;
   delete data.created_at;
   delete data.updated_at;
+
+  // Defensive mapping for purchase_items (Bug #26: unit_price vs unit_cost)
+  if (tableKey === 'purchase_items' || cfg?.table === 'purchase_items') {
+    if (data.unit_price !== undefined && data.unit_cost === undefined) {
+      data.unit_cost = data.unit_price;
+      delete data.unit_price;
+    }
+  }
+
   data = moneyIn(data, cfg.money);
   for (const b of cfg.bools) {
     if (b in data) data[b] = data[b] ? 1 : 0;
@@ -316,6 +325,7 @@ export function createResourceRouter() {
     if (key === 'transactions' && !data.date) {
       data.date = now.slice(0, 10);
     }
+
 
     // Rapid duplicate order submission safeguard (rejects double-submission within 3 seconds)
     if (key === 'orders' && !restore) {
@@ -429,6 +439,18 @@ export function createResourceRouter() {
     if (!cfg) return res.status(404).json({ error: 'Unknown resource' });
     const table = cfg.table || key;
     const existing = queryOne(`SELECT * FROM ${table} WHERE id = ?`, [req.params.id]);
+
+    // Preserve historical customer info on orders before customer deletion (Bug #20)
+    if (key === 'customers' && existing) {
+      execute(`
+        UPDATE orders 
+        SET customer_name = COALESCE(customer_name, ?),
+            customer_phone = COALESCE(customer_phone, ?),
+            customer_area = COALESCE(customer_area, ?),
+            customer_id = NULL
+        WHERE customer_id = ?
+      `, [existing.name || null, existing.phone || null, existing.area || null, req.params.id]);
+    }
 
     execute(`DELETE FROM ${table} WHERE id = ?`, [req.params.id]);
 

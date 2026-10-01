@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 export function Dashboard({ navigate }: { navigate: (path: string) => void }) {
-  const { stats, salesData, topProducts, categorySales, recentActivity, loading } = useDashboardData();
+  const { stats, salesData, topProducts, categorySales, recentActivity, overdueCustomers, loading } = useDashboardData();
   const { symbol } = useSettings();
 
   if (loading || !stats) {
@@ -99,6 +99,59 @@ export function Dashboard({ navigate }: { navigate: (path: string) => void }) {
         <StatCard label="Low Stock" value={String(stats.lowStockCount)} icon={<AlertTriangle size={20} />} color="amber" onClick={() => navigate('/stock')} />
         <StatCard label="Out of Stock" value={String(stats.outOfStockCount)} icon={<PackageX size={20} />} color="rose" onClick={() => navigate('/stock')} />
       </div>
+
+      {/* Overdue Customer Credit Alerts (Bug #24: Informative Alert Card) */}
+      {overdueCustomers.length > 0 && (
+        <div className="mt-4 rounded-2xl border border-amber-300 bg-amber-50/70 p-4 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-200/80 pb-3 mb-3">
+            <div className="flex items-center gap-2">
+              <div className="rounded-lg bg-amber-200/80 p-1.5 text-amber-800">
+                <Clock size={18} />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-amber-900">Overdue Customer Credit Alerts ({overdueCustomers.length})</h3>
+                <p className="text-xs text-amber-700">Customers with promise due dates that have passed</p>
+              </div>
+            </div>
+            <span className="text-xs font-bold text-amber-800 bg-amber-100 px-3 py-1 rounded-full border border-amber-200 self-start sm:self-auto">
+              Total Overdue: {fmt(overdueCustomers.reduce((s, c) => s + c.unpaidAmount, 0))}
+            </span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="text-amber-900 font-semibold border-b border-amber-200/60 pb-1">
+                  <th className="py-1">Customer</th>
+                  <th className="py-1">Area</th>
+                  <th className="py-1">Phone</th>
+                  <th className="py-1">Invoice #</th>
+                  <th className="py-1">Promise Date</th>
+                  <th className="py-1 text-right">Overdue</th>
+                  <th className="py-1 text-right">Amount Due</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-amber-200/50">
+                {overdueCustomers.slice(0, 5).map((c, idx) => (
+                  <tr key={`${c.customerId}-${c.orderNumber}-${idx}`} className="hover:bg-amber-100/40">
+                    <td className="py-1.5 font-bold text-slate-800">{c.customerName}</td>
+                    <td className="py-1.5 text-slate-600">{c.area || '—'}</td>
+                    <td className="py-1.5 text-slate-600">{c.phone || '—'}</td>
+                    <td className="py-1.5 font-mono text-slate-700">{c.orderNumber}</td>
+                    <td className="py-1.5 text-slate-600">{formatDate(c.dueDate)}</td>
+                    <td className="py-1.5 text-right">
+                      <span className="inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-extrabold text-rose-700">
+                        {c.daysOverdue}d overdue
+                      </span>
+                    </td>
+                    <td className="py-1.5 text-right font-black text-rose-700">{fmt(c.unpaidAmount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Quick actions */}
       <div className="mt-6">

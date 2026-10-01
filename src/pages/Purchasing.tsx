@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { api, resolveImageUrl } from '@/lib/api';
-import type { PurchaseOrder, Supplier, Product, Company, Brand } from '@/lib/types';
+import type { PurchaseOrder, Supplier, Product, Company, Brand, Category } from '@/lib/types';
 import { useSettings } from '@/context/SettingsContext';
 import { useToast } from '@/components/Toast';
 import { Button } from '@/components/Button';
@@ -663,6 +663,7 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [supplierId, setSupplierId] = useState('');
   const [note, setNote] = useState('');
   interface POLine {
@@ -683,6 +684,8 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
   const [productQuery, setProductQuery] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
   const [showCsvModal, setShowCsvModal] = useState(false);
+  const [showQuickProductModal, setShowQuickProductModal] = useState(false);
+  const [quickProductName, setQuickProductName] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
@@ -692,14 +695,17 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
         api.get<Supplier[]>('/api/data/suppliers'),
         api.get<Product[]>('/api/data/products?limit=10000'),
         api.get<Brand[]>('/api/data/brands'),
-      ]).then(([s, p, b]) => {
+        api.get<Category[]>('/api/data/categories').catch(() => []),
+      ]).then(([s, p, b, c]) => {
         setSuppliers((s || []).sort((a, b) => a.name.localeCompare(b.name)));
         setProducts((p || []).sort((a, b) => a.name.localeCompare(b.name)));
         setBrands(b || []);
+        setCategories(c || []);
       }).catch(() => {
         setSuppliers([]);
         setProducts([]);
         setBrands([]);
+        setCategories([]);
       });
       setSupplierId('');
       setNote('');
@@ -707,8 +713,15 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
       setProductQuery('');
       setShowDropdown(false);
       setShowCsvModal(false);
+      setShowQuickProductModal(false);
+      setQuickProductName('');
     }
   }, [open]);
+
+  const handleQuickProductCreated = (newProd: Product) => {
+    setProducts((prev) => [...prev, newProd].sort((a, b) => a.name.localeCompare(b.name)));
+    handleAddProduct(newProd);
+  };
 
   const handleAddItemsFromCsv = (items: { product: Product; quantity: number; cost: number }[]) => {
     setLines((prev) => {
@@ -959,14 +972,30 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
             <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
               Add Products to Purchase Order
             </label>
-            <button
-              type="button"
-              onClick={() => setShowCsvModal(true)}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-sm transition"
-            >
-              <Upload size={13} className="text-sky-600" />
-              Import Items from CSV
-            </button>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                icon={<Plus size={14} />}
+                onClick={() => {
+                  setQuickProductName(productQuery.trim());
+                  setShowQuickProductModal(true);
+                  setShowDropdown(false);
+                }}
+                className="h-7 text-xs px-2.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+              >
+                + New Product
+              </Button>
+              <button
+                type="button"
+                onClick={() => setShowCsvModal(true)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-sm transition"
+              >
+                <Upload size={13} className="text-sky-600" />
+                Import Items from CSV
+              </button>
+            </div>
           </div>
           <div className="relative">
             <div className="relative flex items-center">
@@ -1012,8 +1041,22 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
             {showDropdown && (
               <div className="absolute left-0 right-0 top-full z-50 mt-1.5 max-h-72 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-2xl ring-1 ring-slate-900/10 animate-[modalIn_0.15s_ease-out]">
                 {filteredProducts.length === 0 ? (
-                  <div className="py-6 text-center text-sm text-slate-400">
-                    No products found matching "{productQuery}"
+                  <div className="py-6 text-center text-sm text-slate-500">
+                    <p>No products found matching "{productQuery}"</p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      icon={<Plus size={14} />}
+                      onClick={() => {
+                        setQuickProductName(productQuery.trim());
+                        setShowQuickProductModal(true);
+                        setShowDropdown(false);
+                      }}
+                      className="mt-2 text-xs text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                    >
+                      Create "{productQuery}" as New Product
+                    </Button>
                   </div>
                 ) : (
                   <div className="divide-y divide-slate-100">
@@ -1324,6 +1367,16 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
         )}
       </div>
 
+      {/* Quick Add Product Modal (Bug #10) */}
+      <QuickProductModal
+        open={showQuickProductModal}
+        onClose={() => setShowQuickProductModal(false)}
+        initialName={quickProductName}
+        categories={categories}
+        brands={brands}
+        onCreated={handleQuickProductCreated}
+      />
+
       {/* Import PO Items from CSV Modal */}
       <ImportPoItemsModal
         open={showCsvModal}
@@ -1332,6 +1385,201 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
         products={products}
         symbol={symbol}
       />
+    </Modal>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                         QUICK ADD PRODUCT MODAL (BUG #10)                  */
+/* -------------------------------------------------------------------------- */
+
+function QuickProductModal({
+  open,
+  onClose,
+  initialName = '',
+  categories,
+  brands,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  initialName?: string;
+  categories: Category[];
+  brands: Brand[];
+  onCreated: (newProduct: Product) => void;
+}) {
+  const { symbol } = useSettings();
+  const { notify } = useToast();
+  const [name, setName] = useState(initialName);
+  const [categoryId, setCategoryId] = useState('');
+  const [brandId, setBrandId] = useState('');
+  const [cartonToBox, setCartonToBox] = useState(1);
+  const [purchasePrice, setPurchasePrice] = useState(0);
+  const [retailPrice, setRetailPrice] = useState(0);
+  const [wholesalePrice, setWholesalePrice] = useState(0);
+  const [dealerPrice, setDealerPrice] = useState(0);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setName(initialName);
+      setCategoryId('');
+      setBrandId('');
+      setCartonToBox(1);
+      setPurchasePrice(0);
+      setRetailPrice(0);
+      setWholesalePrice(0);
+      setDealerPrice(0);
+    }
+  }, [open, initialName]);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) {
+      notify('Product name is required', 'error');
+      return;
+    }
+    setSaving(true);
+    try {
+      const cleanPrefix = name.replace(/[^a-zA-Z0-9]/g, '').slice(0, 3).toUpperCase() || 'PRD';
+      const randomNum = Math.floor(100000 + Math.random() * 900000);
+      const sku = `${cleanPrefix}-${randomNum}`;
+
+      const created = await api.post<Product>('/api/data/products', {
+        name: name.trim(),
+        sku,
+        category_id: categoryId || null,
+        brand_id: brandId || null,
+        carton_to_box: Number(cartonToBox) > 0 ? Number(cartonToBox) : 1,
+        purchase_price: Number(purchasePrice) || 0,
+        cost_price: Number(purchasePrice) || 0,
+        retail_price: Number(retailPrice) || 0,
+        wholesale_price: Number(wholesalePrice) || 0,
+        dealer_price: Number(dealerPrice) || 0,
+        stock_quantity: 0,
+        min_stock_level: 5,
+      });
+
+      notify(`Created product "${created.name}"`, 'success');
+      onCreated(created);
+      onClose();
+    } catch (err: any) {
+      notify(err?.message || 'Failed to create product', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Quick Add Product"
+      size="md"
+      footer={
+        <div className="flex items-center justify-end gap-2 w-full">
+          <Button variant="outline" size="sm" onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
+          <Button size="sm" onClick={handleSave} disabled={saving || !name.trim()}>
+            {saving ? 'Creating...' : 'Create & Add to PO'}
+          </Button>
+        </div>
+      }
+    >
+      <form onSubmit={handleSave} className="space-y-3.5">
+        <Field label="Product Name *">
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Urea Fertilizer 50kg / DAP"
+            required
+            autoFocus
+          />
+        </Field>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Category">
+            <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+              <option value="">Select Category...</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Brand / Company">
+            <Select value={brandId} onChange={(e) => setBrandId(e.target.value)}>
+              <option value="">Select Brand...</option>
+              {brands.map((b) => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Pieces per Carton (Packing)">
+            <Input
+              type="number"
+              min="1"
+              value={cartonToBox}
+              onChange={(e) => setCartonToBox(Math.max(1, Number(e.target.value) || 1))}
+              placeholder="1"
+            />
+          </Field>
+          <Field label={`Purchase Rate / Pc (${symbol})`}>
+            <Input
+              type="number"
+              min="0"
+              step="any"
+              value={purchasePrice === 0 ? '' : purchasePrice}
+              onChange={(e) => setPurchasePrice(Math.max(0, Number(e.target.value) || 0))}
+              placeholder="0"
+            />
+          </Field>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 space-y-2">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            Selling Price Tiers (Per Piece)
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            <Field label="Retail Rate">
+              <Input
+                type="number"
+                min="0"
+                step="any"
+                value={retailPrice === 0 ? '' : retailPrice}
+                onChange={(e) => setRetailPrice(Math.max(0, Number(e.target.value) || 0))}
+                placeholder="0"
+                className="text-xs"
+              />
+            </Field>
+            <Field label="Wholesale Rate">
+              <Input
+                type="number"
+                min="0"
+                step="any"
+                value={wholesalePrice === 0 ? '' : wholesalePrice}
+                onChange={(e) => setWholesalePrice(Math.max(0, Number(e.target.value) || 0))}
+                placeholder="0"
+                className="text-xs"
+              />
+            </Field>
+            <Field label="Dealer Rate">
+              <Input
+                type="number"
+                min="0"
+                step="any"
+                value={dealerPrice === 0 ? '' : dealerPrice}
+                onChange={(e) => setDealerPrice(Math.max(0, Number(e.target.value) || 0))}
+                placeholder="0"
+                className="text-xs"
+              />
+            </Field>
+          </div>
+        </div>
+      </form>
     </Modal>
   );
 }
@@ -1708,17 +1956,50 @@ export function Suppliers() {
     }
   };
 
+  const [savingSupplier, setSavingSupplier] = useState(false);
+
   const save = async (data: Partial<Supplier>) => {
+    if (savingSupplier) return;
+    setSavingSupplier(true);
     try {
       const payload = { ...data };
-      if (!editing && (payload as any).balance == null) {
-        (payload as any).balance = (payload as any).opening_balance || 0;
-      }
+      const openingDue = Math.max(0, Number(payload.opening_balance || 0));
+
       if (editing) {
+        const oldOpening = Math.max(0, Number(editing.opening_balance || 0));
+        const delta = openingDue - oldOpening;
+        payload.opening_balance = openingDue;
+        payload.balance = Number(editing.balance || 0) + delta;
         await api.put(`/api/data/suppliers/${editing.id}`, payload);
         notify('Supplier updated', 'success');
       } else {
-        await api.post('/api/data/suppliers', payload);
+        payload.opening_balance = openingDue;
+        payload.balance = openingDue;
+        const createdSupplier = await api.post<Supplier>('/api/data/suppliers', payload);
+
+        // Generate initial PO record if opening balance > 0 so it appears in Pending Payments
+        if (openingDue > 0 && createdSupplier?.id) {
+          const poNumber = generateDocNumber('PO-OB');
+          const po = await api.post<any>('/api/data/purchase_orders', {
+            po_number: poNumber,
+            supplier_id: createdSupplier.id,
+            subtotal: openingDue,
+            total: openingDue,
+            paid_amount: 0,
+            status: 'received',
+            payment_status: 'unpaid',
+            note: 'Initial Opening Balance / Previous Supplier Due',
+          });
+          await api.post('/api/data/purchase_items', {
+            purchase_id: po.id,
+            product_id: null,
+            product_name: 'Opening Balance / Previous Supplier Due',
+            quantity: 1,
+            unit_cost: openingDue,
+            total: openingDue,
+            unit: 'balance',
+          });
+        }
         notify('Supplier added', 'success');
       }
       setShowForm(false);
@@ -1726,6 +2007,8 @@ export function Suppliers() {
       load();
     } catch (e: any) {
       notify(e.message || 'Failed to save', 'error');
+    } finally {
+      setSavingSupplier(false);
     }
   };
 
@@ -1838,7 +2121,7 @@ export function Suppliers() {
         )}
       </Card>
 
-      <SupplierForm open={showForm} onClose={() => { setShowForm(false); setEditing(null); }} onSave={save} editing={editing} />
+      <SupplierForm open={showForm} onClose={() => { setShowForm(false); setEditing(null); }} onSave={save} editing={editing} saving={savingSupplier} />
       <ConfirmModal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => deleteTarget && remove(deleteTarget)} title="Delete Supplier" message={`Delete ${deleteTarget?.name}?`} confirmLabel="Delete" danger />
 
       {/* Pay Supplier Modal */}
@@ -2340,7 +2623,7 @@ function PaySupplierModal({
   );
 }
 
-function SupplierForm({ open, onClose, onSave, editing }: { open: boolean; onClose: () => void; onSave: (d: any) => void; editing: any }) {
+function SupplierForm({ open, onClose, onSave, editing, saving }: { open: boolean; onClose: () => void; onSave: (d: any) => void; editing: any; saving?: boolean }) {
   const [form, setForm] = useState({ name: '', phone: '', email: '', address: '', company_id: '', contact_person: '', opening_balance: 0 });
   const [companies, setCompanies] = useState<Company[]>([]);
   useEffect(() => {
@@ -2351,7 +2634,7 @@ function SupplierForm({ open, onClose, onSave, editing }: { open: boolean; onClo
     else setForm({ name: '', phone: '', email: '', address: '', company_id: '', contact_person: '', opening_balance: 0 });
   }, [editing, open]);
   return (
-    <Modal open={open} onClose={onClose} title={editing ? 'Edit Supplier' : 'Add Supplier'} size="md" footer={<><Button variant="outline" onClick={onClose}>Cancel</Button><Button onClick={() => onSave({ ...form, company_id: form.company_id || null })} disabled={!form.name}>Save</Button></>}>
+    <Modal open={open} onClose={onClose} title={editing ? 'Edit Supplier' : 'Add Supplier'} size="md" footer={<><Button variant="outline" onClick={onClose}>Cancel</Button><Button onClick={() => onSave({ ...form, company_id: form.company_id || null })} disabled={!form.name || saving}>{saving ? 'Saving...' : 'Save'}</Button></>}>
       <div className="space-y-3">
         <Field label="Name" required><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus /></Field>
         <Field label="Company"><Select value={form.company_id} onChange={(e) => setForm({ ...form, company_id: e.target.value })}><option value="">No company</option>{companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
@@ -2361,7 +2644,9 @@ function SupplierForm({ open, onClose, onSave, editing }: { open: boolean; onClo
         </div>
         <Field label="Email"><Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
         <Field label="Address"><Textarea value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} rows={2} /></Field>
-        <Field label="Opening Balance"><Input type="number" value={form.opening_balance || ''} onChange={(e) => setForm({ ...form, opening_balance: Number(e.target.value) })} /></Field>
+        <Field label="Opening Balance (Initial Payable)">
+          <Input type="number" value={form.opening_balance || ''} onChange={(e) => setForm({ ...form, opening_balance: Number(e.target.value) })} placeholder="e.g. 50000" />
+        </Field>
       </div>
     </Modal>
   );
