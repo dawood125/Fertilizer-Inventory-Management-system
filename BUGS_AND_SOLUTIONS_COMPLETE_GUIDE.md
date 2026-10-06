@@ -633,7 +633,99 @@ setPrintReturnData({
   totalReturnAmount: grandTotal,
   revisedOrderTotal: Math.max(0, origOrderTotal - grandTotal),
 });
-setShowPrintPreview(true);
+```
+
+---
+
+### Feature: Sales Order Original Invoice Instant Update upon Sales Return (Net Active Items & Revision Sync)
+#### 1. User Complaint
+> *"Currently when we return item it show the invoice in return that we just recently updated but client want that the original invoice that is stored in sales order also update and do not show the return item and only the show the item that we sale like client mean to say that when return items or full bill then it also updated the original invoice in sale order immediately. But make sure our calculation and data calculation will not disturb and everything calculate correctly."*
+
+#### 2. Root Cause & Architectural Considerations
+In POS & ERP systems:
+- Hard-deleting rows from `order_items` when a return occurs corrupts audit trails, destroys original POS sale records, and causes double-subtraction in Gross Sales reports (`Gross Sales - Sales Returns = Net Sales` would subtract the return twice if `order_items` were mutated directly).
+- However, when a client re-opens or reprints an invoice from the **Sales Orders** page (`Orders.tsx`), displaying the original pre-return quantities (e.g. 10 cartons totaling Rs. 15,000) while the order total says Rs. 12,000 creates confusion for cashiers and customers.
+- The client required that the Sales Order invoice reflect **only active kept items** with updated net quantities, while completely omitting fully returned products.
+
+#### 3. Plan
+1. **Dynamic Active Items Projection (`Orders.tsx`)**:
+   - In `openView(order)`, fetch approved `sales_returns` for the order alongside `order_items`.
+   - Compute `returned_quantity` per product line and derive `net_quantity = Math.max(0, original_quantity - returned_quantity)`.
+   - Pro-rate line discounts: `netDiscount = (origDiscount / origQty) * netQty`.
+   - Recompute line net total: `netTotal = (netQty * unitPrice) - netDiscount`.
+2. **Sales Invoice Document (`SalesInvoiceDocument.tsx`)**:
+   - Omit items where `net_quantity <= 0` (so fully returned goods do not appear on the reprinted sales invoice).
+   - Pass active kept items with their net quantities and recomputed net line totals.
+   - If 100% of the bill was returned, render a clean informative notice `(All items on this order were returned)` with 0 total.
+   - Keep `Subtotal`, `Discount`, `Tax`, `Net Total`, `Paid Amount`, `Remaining Due`, `Previous Balance`, and `Grand Total` 100% mathematically aligned.
+3. **Order Details Modal (`Orders.tsx`)**:
+   - Display a prominent alert banner when an order has approved returns: `Sales Return Applied: Returned Rs. X`.
+   - Table displays active kept quantities with subtext: `Y ctn returned (Original: Z)`.
+   - Below the financial summary, render a dedicated **Returned Items Summary** audit box showing return voucher numbers, products, and credit amounts.
+4. **Order State Synchronization (`SalesReturns.tsx`)**:
+   - When a return is created or approved, update `orders` table with `subtotal: netKeptSubtotal`, `total: netKeptTotal`, `paid_amount: netAllocatedPaid`, and `payment_status`.
+5. **Ledger & Audit Integrity**:
+   - Preserve `order_items`, `stock_movements`, and `transactions` tables to guarantee that inventory counts, ledger entries, and Profit & Loss reports remain 100% accurate without double-counting.
+
+#### 4. Implementation
+**File:** `src/pages/Orders.tsx`
+```tsx
+const [allItems, allPayments, products, allOrders, customer, rawReturns] = await Promise.all([
+  api.get<OrderItem[]>('/api/data/order_items'),
+  api.get<OrderPayment[]>('/api/data/order_payments'),
+  api.get<Product[]>('/api/data/products?limit=10000'),
+  api.get<Order[]>('/api/data/orders?limit=10000').catch(() => []),
+  order.customer_id ? api.get<any>(`/api/data/customers/${order.customer_id}`).catch(() => null) : Promise.resolve(null),
+  api.get<any[]>(`/api/data/sales_returns?order_id=${order.id}`).catch(() => []),
+]);
+
+const approvedReturns = (rawReturns || []).filter(
+  (r: any) => (r.status || 'approved') !== 'rejected'
+);
+
+// Map returned quantities
+const returnsByProdId = new Map<string, number>();
+for (const ret of approvedReturns) {
+  const qty = Number(ret.quantity || 0);
+  if (ret.product_id) {
+    returnsByProdId.set(ret.product_id, (returnsByProdId.get(ret.product_id) || 0) + qty);
+  }
+}
+
+// Compute net active items
+const mappedItems = rawItems.map((i) => {
+  const origQty = Number(i.quantity || 0);
+  const returnQty = Math.min(origQty, returnsByProdId.get(i.product_id) || 0);
+  const netQty = Math.max(0, origQty - returnQty);
+  const netTotal = Math.round((netQty * Number(i.unit_price)) * 100) / 100;
+  return {
+    ...i,
+    original_quantity: origQty,
+    returned_quantity: returnQty,
+    net_quantity: netQty,
+    quantity: netQty,
+    total: netTotal,
+  };
+});
+
+// Omit fully returned items from active invoice view
+const activeKeptItems = mappedItems.filter((i) => i.net_quantity > 0);
+const netSubtotal = activeKeptItems.reduce((s, it) => s + Number(it.total || 0), 0);
+```
+
+**File:** `src/pages/SalesReturns.tsx`
+```tsx
+const netKeptTotal = Math.max(0, oldTotal - grandTotal);
+const netKeptSubtotal = Math.max(0, oldSubtotal - grandTotal);
+const netAllocatedPaid = Math.min(oldPaid, netKeptTotal);
+const newPaymentStatus = (netKeptTotal <= netAllocatedPaid) ? 'paid' : (netAllocatedPaid > 0 ? 'partial' : 'unpaid');
+
+await api.put(`/api/data/orders/${order.id}`, {
+  subtotal: netKeptSubtotal,
+  total: netKeptTotal,
+  paid_amount: netAllocatedPaid,
+  payment_status: newPaymentStatus,
+});
 ```
 
 ---
@@ -710,7 +802,7 @@ Embed a `+ Quick Add Product` button next to the product selector inside the PO 
 > *"Another bug happened that when i tried to add a supplier with opening and click save button then it show error message like 'table purchase_items has no column named unit_price' but when i go back and see it was created four employers with same name and opening balance and also appearing in pending payments."*
 
 #### 2. Root Cause
-1. Schema divergence: `order_items` (sales) uses `unit_price`, but `purchase_items` (purchases) uses `unit_cost`. The supplier opening balance helper erroneously posted `{ unit_price: openingDue }` to `/api/data/purchase_items`. SQLite rejected it with an error. The user clicked Save multiple times, creating 4 duplicate suppliers.
+1. Schema divergence: `order_items` (sales) uses `unit_price`, but `purchase_items` (purchases) uses `unit_cost`. The supplier opening balance helper erroneously posted `{ unit_price: openingDue }` to `/api/data/purchase_items`. SQLite threw an unhandled exception.
 2. The UI lacked a loading/saving state, so when the error message popped up, the user clicked "Save" 4 times. Each click had already created the `supplier` before failing on `purchase_items`, generating 4 duplicate suppliers.
 
 #### 3. Plan
@@ -1028,6 +1120,403 @@ Wrap root inside `src/App.tsx`:
 </ErrorBoundary>
 ```
 
+## Module 8: Hardware, Printing & Page Layout
+
+### Bug #28: Physical Printer Edge Clipping on A5/A4 Bills (Non-Printable Roller Margin Protection)
+#### 1. User Complaint
+> *"I have sent the updated installer to my partner and he tested the system with client. And when he printed the bills then it does not printing correctly and properly. Please analyze the image carefully and find the bug and fix it and test it properly and then give me updated installer."*
+*(Physical printouts on A5 half-A4 paper suffered severe edge clipping: "BUSINESS" became "USINESS", "Sr" serial column was truncated or completely invisible, right edge chopped the last digits of all totals like "Rs 4,320" -> "Rs 4,3" and "Rs 14,040" -> "Rs 14,0", summary amounts were clipped, and the top brand header was cut in half).*
+
+#### 2. Root Cause
+1. **Zero-Margin Suppression in Electron & Global Styles**:
+   - `electron/main.js` previously set `margins: { marginType: 'none', top: 0, bottom: 0, left: 0, right: 0 }, marginsType: 1` in `silent-print`.
+   - `src/index.css` had a global `@media print { @page { margin: 0 !important; } }`.
+   - This forced Chromium to render content starting directly at physical paper coordinate $(0, 0)$.
+2. **Physical Mechanical Printer Feed Limitations**:
+   - Real-world desktop laser, inkjet, and thermal printers (HP, Epson, Canon, Brother) have physical feed rollers that physically cannot deposit ink/toner within $4.5\text{mm} - 6\text{mm}$ of the physical paper edges.
+   - When coordinates $(0, 0)$ to $(148.5\text{mm}, 210\text{mm})$ were printed without safety margins, the rollers cut off ~5mm of the left edge (eating "B", "S", and the entire "Sr" column), ~5mm of the right edge (eating the last digits of the "Total" column and summary numbers), and ~4mm of the top edge.
+3. **Table Column Allocation Flaws**:
+   - The `Sr` column was allocated only $4\%$ ($5.46\text{mm}$ on A5), which placed it entirely within the left roller dead zone.
+   - The `Total` column was allocated only $12\%$, and right-aligned text touched the right paper edge.
+   - The header text `Carton Rate` wrapped into two lines (`Carton` / `Rate`) on compact paper.
+4. **Sales Return Document Missing Print Styles**:
+   - `SalesReturnDocument.tsx` lacked an `@media print` style block and had table column widths totaling $116\%$.
+
+#### 3. Plan
+1. **Enforce Safe Physical Page Margins**:
+   - In `electron/main.js`, configure `silent-print` and `save-pdf` with `margins: { marginType: 'default' }, marginsType: 0` so Chromium strictly honors CSS `@page` declarations.
+   - In `src/index.css`, eliminate conflicting zero-margin `@page` overrides.
+   - In `SalesInvoiceDocument.tsx` & `SalesReturnDocument.tsx`, set explicit `@page` margins:
+     `@page { size: ${isA4 ? 'A4 portrait' : '148.5mm 210mm'}; margin: ${isA4 ? '8mm 8mm 8mm 8mm' : '5mm 6mm 5mm 6mm'} !important; }`
+     This reserves a safe 6mm left/right and 5mm top/bottom margin on every printed page (Pages 1, 2, 3...).
+2. **Rebalance Table Column Widths (Summing to exactly 100%)**:
+   - `Sr`: `5.5%` (centered, room for numbers 1 to 999)
+   - `Product`: `27%` (generous room for descriptions)
+   - `Carton`: `7%`
+   - `Packing`: `7%`
+   - `Box Rate`: `10%`
+   - `Ctn Rate`: `11.5%` (renamed from "Carton Rate" to "Ctn Rate" to prevent multi-line breaks)
+   - `Amount`: `11%`
+   - `DISC`: `7%`
+   - `Total`: `14%` (`white-space: nowrap; padding-right: 4px;` so amounts never clip)
+   - Sum: $5.5 + 27 + 7 + 7 + 10 + 11.5 + 11 + 7 + 14 = 100.0\%$.
+3. **Add Border & Text Safety Padding**:
+   - Assign `className="sr"` and `className="total"` to table cells.
+   - Give `.summary-row` `white-space: nowrap; padding-right: 2px;`.
+   - Update `.business-banner` grid to `1.15fr 0.95fr 1.3fr` so long address names have ample space.
+4. **Sales Return Document Polish**:
+   - Implement matching `@media print` rules and normalize column widths to $100\%$.
+
+#### 4. Implementation
+**File:** `electron/main.js`
+```javascript
+// Silent print — sends directly to the default printer without dialog
+ipcMain.handle('silent-print', async (_event, options) => {
+  const win = BrowserWindow.getFocusedWindow() || mainWindow;
+  if (!win) return { ok: false, error: 'No window' };
+  try {
+    const isHalfPage = options?.halfPage === true;
+    const printOptions = {
+      silent: options?.silent !== false,
+      printBackground: true,
+      color: false, // ink-saver gray receipt — grayscale
+      landscape: false,
+      pageSize: isHalfPage ? 'A5' : 'A4',
+      margins: { marginType: 'default' },
+      marginsType: 0, // 0 = default (strictly respects CSS @page rules in the printed document)
+      duplexMode: options?.duplexMode || 'longEdge',
+    };
+
+    await new Promise((resolve, reject) => {
+      win.webContents.print(printOptions, (success, failureReason) => {
+        if (success) resolve();
+        else reject(new Error(failureReason || 'Print failed'));
+      });
+    });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err) };
+  }
+});
+```
+
+**File:** `src/components/SalesInvoiceDocument.tsx`
+```css
+@media print {
+  @page {
+    size: ${isA4 ? 'A4 portrait' : '148.5mm 210mm'};
+    margin: ${isA4 ? '8mm 8mm 8mm 8mm' : '5mm 6mm 5mm 6mm'} !important;
+  }
+
+  .invoice-card {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    page-break-after: auto !important;
+    break-after: auto !important;
+    box-sizing: border-box !important;
+  }
+
+  .invoice-table thead th {
+    padding: 3px 2px !important;
+    font-size: 9px !important;
+    font-weight: 900 !important;
+    background: #e2e8f0 !important;
+    border: 1.5px solid #475569 !important;
+    color: #000000 !important;
+    white-space: nowrap !important;
+  }
+
+  .invoice-table tbody td {
+    padding: 2.5px 2px !important;
+    font-size: 8.5px !important;
+    line-height: 1.2 !important;
+    border: 1px solid #64748b !important;
+    color: #000000 !important;
+  }
+
+  .invoice-table tbody td.sr {
+    text-align: center !important;
+    padding: 2.5px 1px !important;
+    font-weight: 700 !important;
+  }
+
+  .invoice-table tbody td.product {
+    font-size: 9px !important;
+    font-weight: 700 !important;
+    padding-left: 3px !important;
+  }
+
+  .invoice-table tbody td.total {
+    font-size: 9px !important;
+    font-weight: 900 !important;
+    padding-right: 3px !important;
+    white-space: nowrap !important;
+  }
+}
+```
+
+Table Headers:
+```tsx
+<thead>
+  <tr>
+    <th style={{ width: '5.5%' }}>Sr</th>
+    <th style={{ width: '27%' }}>Product</th>
+    <th style={{ width: '7%' }}>Carton</th>
+    <th style={{ width: '7%' }}>Packing</th>
+    <th style={{ width: '10%' }}>Box Rate</th>
+    <th style={{ width: '11.5%' }}>Ctn Rate</th>
+    <th style={{ width: '11%' }}>Amount</th>
+    <th style={{ width: '7%' }}>DISC</th>
+    <th style={{ width: '14%' }}>Total</th>
+  </tr>
+</thead>
+```
+
+---
+
+## Module 9: Customer Store Credits & Supplier Credits (Due to Us) Auto-Settlement
+
+### Overview & Real-World Use Case
+In wholesale operations:
+1. **Customer Store Credits (Negative Balance / Advance / Credit Note)**: When a customer returns goods and chooses a Credit Note resolution instead of immediate cash payout, the customer's balance becomes negative (`customer.balance < 0`). This means the store owes money / credit to the customer. When this customer makes a new purchase, the cashier needs the ability to automatically apply / settle this credit against the new bill, collect only the remaining net cash, mark the bill as paid without falsely demanding full cash, and print the exact breakdown on the customer's sales invoice.
+2. **Supplier Credits (Negative Balance / Due to Us)**: When our store returns defective biscuits or damaged stock to a manufacturer/supplier with a Credit Note, the supplier balance decreases into negative (`supplier.balance < 0`), meaning the supplier owes us credit / money. When we place a new purchase order with that supplier, the manager can settle our advance credit against the new PO, reducing our accounts payable accordingly.
+
+---
+
+### Key Technical & Accounting Invariants
+
+1. **Customer Store Credit Formula**:
+   - `availableStoreCredit = balance < 0 ? Math.abs(balance) : 0`
+   - `storeCreditApplied = Math.min(availableStoreCredit, bill.total)`
+   - `cashDue = Math.max(0, bill.total - storeCreditApplied)`
+   - If paid in full (`paymentType === 'full'`): `cashPaid = cashDue`, `effectivePaid = storeCreditApplied + cashPaid = bill.total`, `remaining = 0`, `paymentStatus = 'paid'`.
+   - **Balance Update Invariant**:
+     $$\text{newCustomerBal} = \text{oldCustomerBal} + \text{remaining} + \text{storeCreditApplied}$$
+     - *Example 1 (Full coverage)*: Old balance $-2,000$. Bill $1,500$. Store credit applied $1,500$. Cash paid $0$. Remaining $0$. $\implies -2,000 + 0 + 1,500 = -500$ (Store credit remaining is Rs. 500).
+     - *Example 2 (Exact settlement)*: Old balance $-2,000$. Bill $2,000$. Store credit applied $2,000$. Cash paid $0$. Remaining $0$. $\implies -2,000 + 0 + 2,000 = 0$ (Account cleared).
+     - *Example 3 (Split payment)*: Old balance $-2,000$. Bill $5,000$. Store credit applied $2,000$. Cash paid $3,000$. Remaining $0$. $\implies -2,000 + 0 + 2,000 = 0$.
+
+2. **Cash Drawer / Bank Safety**:
+   - Store credit redemption is recorded in `order_payments` with `method: 'store_credit'` and `account_type: null`.
+   - Cash register accounts only receive actual cash collected (`cashPaid`), preventing false cash drawer inflation.
+
+3. **Sales Invoice Breakdown (`SalesInvoiceDocument.tsx`)**:
+   - Displays green row: `Store Credit Used: - Rs. X`.
+   - Paid row: `Paid (cash + Credit): Rs. Y`.
+   - Previous Balance row shows: `Prev Store Credit: - Rs. Z` when balance is negative.
+   - Grand Total row shows: `Remaining Store Credit: - Rs. W` when balance remains negative.
+
+4. **Supplier Credit Settlement Formula**:
+   - `availableSupplierCredit = supplier.balance < 0 ? Math.abs(supplier.balance) : 0`
+   - `supplierCreditSettled = Math.min(availableSupplierCredit, po.total)`
+   - On PO Creation: `paid_amount = supplierCreditSettled`, `supplier_credit_used = supplierCreditSettled`.
+   - **Balance Update Invariant on Receive**:
+     $$\text{newSupplierBal} = \text{oldSupplierBal} + \text{poDue} + \text{po.supplier\_credit\_used}$$
+     - *Example 1*: Supplier balance $-10,000$. PO total $6,000$. Credit settled $6,000$. Due $0$. $\implies -10,000 + 0 + 6,000 = -4,000$ (Supplier still owes us Rs. 4,000).
+     - *Example 2*: Supplier balance $-10,000$. PO total $25,000$. Credit settled $10,000$. Due $15,000$. $\implies -10,000 + 15,000 + 10,000 = +15,000$ (Net payable is Rs. 15,000).
+
+5. **Database Migration**:
+   - Migration `015_store_credit_settlement`:
+     - `ALTER TABLE orders ADD COLUMN store_credit_used INTEGER DEFAULT 0;`
+     - `ALTER TABLE purchase_orders ADD COLUMN supplier_credit_used INTEGER DEFAULT 0;`
+
+---
+
+## Bug #28: Customer Store Credit Inadvertent Over-Reporting on Invoice Preview
+
+### Root Cause
+1. In `Orders.tsx` (`openView`), when opening an invoice preview, historical balance was naively computed by summing all prior trade order totals and subtracting all prior payments.
+2. If earlier orders had goods returned via credit notes or cash refunds, the order's total in the database was reduced, but historical payments were unchanged, causing the calculation to ignore credit notes and cash refunds and produce distorted negative balances (e.g. showing `- Rs 11,395` instead of the actual `Rs 8,640` store credit).
+3. The invoice document rendered negative store credits with minus signs (`- Rs ...`), which confused users because store credit is already an asset in customer favor.
+
+### Solution
+1. **Migration 016 (`016_order_previous_balance`)**: Added `previous_balance INTEGER DEFAULT NULL` to the `orders` table.
+2. **Snapshot on Checkout (`POS.tsx`)**: Captured and persisted `previous_balance: selectedCustomer ? selectedCustomer.balance : 0` directly on the order record at POS checkout.
+3. **Accurate Backwards Balance Derivation (`Orders.tsx`)**:
+   - Checks if `previous_balance` exists on the order record.
+   - If null, calculates backwards from the customer's current balance:
+     $$\text{previousBalance} = \text{customer.balance} - (\text{orderRemaining} + \text{storeCreditUsed}) - \sum_{\text{subsequent orders}} \Delta$$
+   - Auto-backfills and persists `previous_balance` to the order record.
+4. **Display Polish (`SalesInvoiceDocument.tsx`)**: Formatted `Prev Store Credit` and `Remaining Store Credit` as clean positive values (`Rs 8,640`) in emerald green (`#047857`) without minus signs.
+
+---
+
+## Bug #29: Purchase Order Bill Layout Cut Off When Printing on A5
+
+### Root Cause
+1. While Sales Invoices and Sales Returns had dedicated printable documents (`SalesInvoiceDocument.tsx` and `SalesReturnDocument.tsx`) with strict `@page { size: 148.5mm 210mm; margin: 5mm 6mm; }` media styles and percentage-based table widths, Purchase Orders were using the generic `<PrintDocument>` component.
+2. `<PrintDocument>` lacked `@page` print rules, using a 3-column header grid that overflowed on A5 width (148.5mm), clipping the `PO #` box and pushing the `Cost / Carton` and `Total` columns off the right margin.
+3. `Purchasing.tsx` did not pass `halfPage` to `<PrintPreview>`, causing Electron's `savePdf` to export an A4 PDF that was clipped when printed on A5 paper.
+
+### Solution
+1. **Dedicated Component (`PurchaseOrderDocument.tsx`)**:
+   - Built a specialized printable document with `@page { size: ${isA4 ? 'A4 portrait' : '148.5mm 210mm'}; margin: ${isA4 ? '8mm' : '5mm 6mm'}; }`.
+   - Ink-saver grayscale layout matching company invoice standards.
+   - Percentage-based table column widths: `Sr` (6%), `Product` (44%), `Qty` (16%), `Cost / Ctn` (16%), `Total` (18%) totaling 100%.
+   - `white-space: nowrap !important;` on all amounts and numeric columns.
+   - Fits 100% within the printable bounds on both A4 and A5 paper without clipping.
+2. **PrintPreview Integration (`Purchasing.tsx`)**:
+   - Replaced `<PrintDocument>` with `<PurchaseOrderDocument>`.
+   - Added `halfPage={settings?.receipt_size !== 'A4'}` to `PrintPreview`.
+
+---
+
+## Bug #30: "Return Items" Button in Order Modal Redirected to Dashboard
+
+### Root Cause
+1. In `src/pages/Orders.tsx`, clicking the "Return Items" button navigated to `#/sales-returns?order_id=${oid}`.
+2. `useHashRoute()` in `src/lib/router.tsx` read `window.location.hash.slice(1)` without stripping query strings, setting `route` to `'/sales-returns?order_id=...'`.
+3. In `src/App.tsx`, the `switch (route)` statement evaluated this exact string, failed to match `case '/sales-returns':`, and hit the default case: `<Dashboard navigate={navigate} />`.
+
+### Solution
+1. **Hash Path Normalization (`src/lib/router.tsx`)**:
+   - Updated `useHashRoute` to clean the route pathname by splitting off query parameters:
+     ```ts
+     const getPath = () => (window.location.hash.slice(1) || '/').split('?')[0] || '/';
+     ```
+   - Matches the route `/sales-returns` accurately in `App.tsx` and maintains sidebar menu selection in `AppShell`.
+2. **Preserved Query Parsing (`SalesReturns.tsx`)**:
+   - `SalesReturns.tsx` continues to read `window.location.hash`, extracts `order_id`, pre-selects the order, and immediately opens the Create Return modal.
+
+---
+
+## Bug #31: Ability to Record Custom Payment Date & Time for Offline/Backdated Receipts
+
+### Root Cause
+1. In `PendingPayments` (`src/pages/Payments.tsx`), when receiving a payment, the modal only allowed input of the amount, method, and remarks.
+2. The payment timestamp was automatically hardcoded to current time (`nowISO()`) by both the frontend and backend (`resources.js`), preventing clients from recording payments received on earlier dates/days.
+
+### Solution
+1. **Editable Date & Time Field (`Payments.tsx`)**:
+   - Added a `datetime-local` input field to `PayModal` pre-filled with the current date/time.
+   - Allows users to backdate payments to the actual date received.
+2. **Backend Timestamp Honor (`server/routes/resources.js`)**:
+   - Updated `resources.js` to preserve `req.body.created_at` when provided instead of overriding with current timestamp.
+3. **Ledger & Transaction Alignment**:
+   - Passes the selected timestamp to `order_payments`, `supplier_payments`, and `transactions` (`date` and `created_at`), ensuring payment histories, statements, and reports reflect the accurate transaction date.
+
+---
+
+## Bug #32: Supplier Page Showing Discrepant Balance Compared to Pending Payments
+
+### Root Cause
+1. **Asymmetric PO Creation vs. Payment**:
+   - When a purchase order was created with status `'pending'`, its liability (`po.total`) was not added to `supplier.balance` (the system only attempted to add it later upon pressing "Receive").
+   - However, if the user paid for this purchase order before receiving it (e.g. from the Pending Payments screen or immediately upon order), the payment code in `Payments.tsx` subtracted `amount` from `supplier.balance`.
+   - Because the purchase obligation had never been added to `supplier.balance`, deducting the payment prematurely reduced the supplier's previous opening balance debt ($15,000 - 2,986 = 12,014).
+2. **Dead-End on Receive**:
+   - In `receivePO`, the code computed `due = Math.max(0, po.total - po.paid_amount)`.
+   - Since the PO had already been paid, `due` was 0, so receiving the PO added 0 to the supplier balance, trapping the balance at Rs 12,014 forever.
+3. **Discrepancy with Pending Payments**:
+   - `Payments.tsx` calculates dues per PO (`po.total - po.paid_amount`). `PO-OB` was Rs 15,000 unpaid, and `PO-3185` was Rs 2,986 fully paid, so Pending Payments correctly showed Rs 15,000.
+   - The Suppliers page showed the corrupted static column (Rs 12,014).
+
+### Solution
+1. **Migration 017 (`017_reconcile_supplier_balances`)**:
+   - Reconciles supplier balances directly from all active purchase orders and approved credit returns across the database:
+     $$\text{balance} = \sum_{\text{All POs}} (\text{po.total} - \text{po.paid\_amount}) - \sum_{\text{Credit Returns}} \text{total\_amount}$$
+2. **Self-Healing Reconciliation (`Purchasing.tsx`)**:
+   - In `Suppliers.tsx` `load()` and `openView()`, dynamically computes each supplier's true outstanding payable directly from their purchase orders and approved credit returns. If the stored database balance drifted, it automatically self-heals and updates the database.
+   - Displays the reconciled balance (Rs 15,000) in both the table and the Supplier Profile & Ledger modal header.
+3. **Harmonized PO Creation & Receive Lifecycles**:
+   - In `CreatePOModal`: Tracks the purchase obligation upon creation, updates `supplier.balance` with `total - supplierCreditSettled`, and records advance credit redemption if applicable.
+   - In `receivePO`: Synchronizes the supplier balance from live PO dues and credit returns, preventing double-counting or loss of paid balances when receiving stock.
+   - In `Payments.tsx`: Recalculates and synchronizes the supplier balance from remaining PO dues upon recording payment.
+
+---
+
+## Bug #33: Pending Payments Modal Sizing & Supplier Credit Settle Checkbox Override
+
+### 1. User Complaint
+> *"First is that modal is not appearing correctly. Also decrease the height of modal and increase the width of it. And second error is that Supplier Credits (Due to Us) is not working correctly. like the i have return a purchase order in credit and supplier owes us to 2000 or something and when i created a new purchase and uncheck the credit score settle and create the order but still system automatically settle the credit score and still it was showing pay 2000 to supplier."*
+
+### 2. Root Cause
+1. **Modal Dimensions**: In `Payments.tsx`, the payment modal was constrained to `max-w-md` (28rem / 448px) and did not have explicit max-height management, causing vertical stretching and a cramped appearance on desktop displays.
+2. **Checkbox Override on PO Creation**: In `Purchasing.tsx`, the `CreatePOModal` component maintained a checkbox state `settleSupplierCredit`, but the submit handler hardcoded `supplierCreditSettled = Math.min(availableSupplierCredit, total)` without checking whether `settleSupplierCredit` was `true`. Even when the user unchecked the box, the system unconditionally subtracted supplier credit.
+
+### 3. Solution
+1. **Modal Sizing (`Payments.tsx`)**:
+   - Expanded payment modal width to `max-w-xl` (36rem / 576px) and added `max-h-[85vh] overflow-y-auto` with clean padding and header layout.
+2. **Respect Settle Checkbox (`Purchasing.tsx`)**:
+   - Updated PO creation logic to strictly check:
+     `const supplierCreditSettled = settleSupplierCredit ? Math.min(availableSupplierCredit, total) : 0;`
+   - If unchecked, `supplier_credit_used = 0`, `paid_amount = 0`, and the supplier's due advance credit is left untouched.
+
+---
+
+## Bug #34: Sales Return Overcrediting on Discounted Bills (Net Billed Unit Price Sync)
+
+### 1. User Complaint
+> *"First we created the bill of Asad of 8,806 with discount 249 and then we created another bill with 9500 with some discount that you can see in the screenshot and these both bill were on full partial. Then we return one item of the bill and it was updating data pending payments correctly. then we return the remaining two item of the 8806 bill but the error is that in customer return bill the calculation i think is wrong . it say total return credit is 'Total Return Credit - Rs 6,051' which is not correct i think it should deduct 249 discount."*
+
+### 2. Root Cause
+1. **Gross vs. Net Return Rate**:
+   - In `order_items`, `unit_price` is the catalog retail price before discount, `discount` is the line discount, and `total` is the net billed amount (`unit_price * quantity - discount`).
+   - When generating returns in `SalesReturns.tsx`, the system previously assigned `unit_price: Number(it.unit_price || 0)` directly from `order_items`, using the gross undiscounted catalog rate.
+   - For Asad's order `ORD-20261004-4245`:
+     - `AMROOD MAZA CANDY`: Catalog Rs 2,755, discount Rs 49, net billed Rs 2,706.
+     - `AAM MAZA BOX`: Catalog Rs 2,986, discount Rs 100, net billed Rs 2,886.
+     - `AMROOD BOX`: Catalog Rs 3,065, discount Rs 100, net billed Rs 2,965.
+     - Gross sum: `Rs 8,806`. Net billed: `Rs 8,557` (Discount `Rs 249`).
+   - Returning the first item credited `Rs 2,755` (overcredited by Rs 49).
+   - Returning the remaining two items credited `3,065 + 2,986 = Rs 6,051` (overcredited by Rs 200).
+   - Across all 3 items, the customer was credited `Rs 8,806` instead of the actual `Rs 8,557` billed.
+   - This `Rs 249` of unearned credit was applied against Asad's subsequent bill `ORD-20261004-9604` (Rs 9,500), improperly shrinking his debt to `Rs 9,251`.
+
+### 3. Solution
+1. **Effective Net Return Rate (`SalesReturns.tsx`)**:
+   - Compute the true net billed unit price per item, factoring in both item-level line discounts and any cart-level order discounts:
+     ```ts
+     const baseNetRate = soldQty > 0
+       ? (lineTotal > 0 ? lineTotal / soldQty : Math.max(0, catalogRate - (lineDisc / soldQty)))
+       : catalogRate;
+     const effectiveNetRate = Math.round(baseNetRate * orderScale * 100) / 100;
+     ```
+   - Return totals are calculated as `returnQty * effectiveNetRate`. For Return 2 (`AMROOD BOX` + `AAM MAZA BOX`), the return credit is now correctly `2,965 + 2,886 = Rs 5,851` (not 6,051).
+2. **Sales Return Voucher Polish (`SalesReturnDocument.tsx`)**:
+   - Extended `ReturnLineItem` with `original_price` and `discount`.
+   - Rate column displays net rate with a clear discount badge: `Rs 2,965 (-Rs 100 disc)`.
+3. **Database Reconcilation & Migration 019 (`019_reconcile_discounted_sales_returns`)**:
+   - Corrected `unit_price` and `total_amount` for the 3 sales return records to their exact net values (`270600`, `288600`, `296500`).
+   - Restored Customer Asad's outstanding balance to `Rs 9,500.00` (`950000` paisa).
+
+---
+
+## Bug #35: Customer Bill Appearing under "Walk-in" & Orphaned Pricing Re-linkage (Ehsan Traders)
+
+### 1. User Complaint
+> *"First a customer name Ehsan Traders it has a opening balance and client made a new bill of this customer and print it and it was showing all customer detail but we go to sales history then it was not showing the bill for that customer and it saved with walk in customer . why this happened because we have created the bill using a customer so it should be saved with that cusotmer name so why this not happenned."*
+
+### 2. Root Cause
+1. **Initial Bill Creation & Customer Re-creation**:
+   - Order `ORD-20260928-9866` (Invoice `INV-20260928-7201`, 51 items, Rs 21,083.94) was created under an initial customer record (`c014202a-ccee-468e-a8df-50f3a68a69a7`).
+   - 8 minutes later, the customer was re-created with an Opening Balance of Rs 36,124.53 (`OB-20260928-5754`), generating a new ID (`012e165f-82e9-4cd3-b072-764b42b0aad5`). The initial record was deleted.
+   - Older order tables did not persist snapshot names. When Migration 014 ran to backfill customer names, looking up `c014202a` returned `NULL`, defaulting `customer_name` to `'Walk-in'`.
+   - In Sales History, the bill showed as `Walk-in (archived)` and was missing from Ehsan Traders' filter.
+   - 51 negotiated custom prices in `customer_product_prices` were also orphaned under the old ID.
+2. **Double-Counting Avoidance**:
+   - The opening balance of Rs 36,124.53 entered by the client already bundled the prior balance of ~15 lakh (`1,504,059`) with this 21 lakh (`2,108,394`) bill.
+   - Disentangling the true opening balance (`1,504,059`) from the sales bill (`2,108,394`) ensures both orders are attributed to Ehsan Traders without inflating their debt, matching their paid amount of Rs 14,560 and remaining balance of Rs 21,564.53.
+
+### 3. Solution
+1. **Migration 020 (`020_relink_ehsan_traders_orders`)**:
+   - Re-linked `ORD-20260928-9866` to `customer_id = '012e165f-82e9-4cd3-b072-764b42b0aad5'`, with `customer_name = 'Ehsan Traders'`, `customer_phone = '03091007015'`, and `customer_area = 'Kamoki'`.
+   - Re-linked all 51 custom product prices to Ehsan Traders' active ID.
+   - Adjusted `OB-20260928-5754` to `1,504,059` and `opening_balance` to `1,504,059`, preserving the net ledger balance of `2,156,453`.
+   - Added a global update restoring customer names on any orders that reference a valid customer ID.
+2. **Defensive Safeguards in Code**:
+   - Updated `server/routes/resources.js` and `server/routes/settings.js` to ensure orders with a valid `customer_id` will never accept or default to `'Walk-in'`.
+   - Updated `src/pages/POS.tsx` with fallback customer lookup on submission.
+3. **Backup JSON File Updated**:
+   - Re-linked order and prices inside `assets/inventory_backup_2026-10-04.json`.
+
 ---
 
 ## Verification Test Scripts Summary
@@ -1038,6 +1527,13 @@ The following test suites exist in `scripts/` to verify these fixes automaticall
 - `test-bug27-and-layout.mjs` (Verifies Bug #27, POS 3-column layout, and Donut Chart)
 - `test-dashboard-and-reports-fix.mjs` (Verifies Timeframe filter fallbacks and backup restore)
 - `test-sales-return-invoice.mjs` (Verifies Sales Return Invoice mathematical model and document structure)
+- `test-order-return-sync-calculations.mjs` (Verifies net active items calculation and accounting integrity)
+- `test-invoice-print-margins.mjs` (Verifies safe @page margins, column widths summing to 100%, and Electron print options)
+- `test-store-credit-settlement.mjs` (Verifies customer store credit & supplier credit settlement invariants)
+- `test-credit-and-po-fix.mjs` (Verifies Migration 016, Store credit calculation, and PO Document)
+- `test-return-redirect-and-payment-date.mjs` (Verifies Bug #30 & #31 route stripping & payment backdating)
+- `test-supplier-balance-sync.mjs` (Verifies Bug #32 Supplier balance reconciliation, PO lifecycle & DB consistency)
+- `test-discounted-returns-fix.mjs` (Verifies Bug #34 Sales return discount math, net billing rates, and customer balance reconciliation)
 
 ---
 *Generated for replication on live web deployment environments.*

@@ -400,10 +400,13 @@ export function PendingPayments() {
       .sort((a, b) => b.creditAmount - a.creditAmount);
   }, [allCustomers]);
 
-  const pay = async (method: string, amount: number, note: string) => {
+  const pay = async (method: string, amount: number, note: string, paymentDate?: string) => {
     if (!payModal || isPayingRef.current) return;
     isPayingRef.current = true;
     setIsPaying(true);
+
+    const paymentTimestamp = paymentDate || new Date().toISOString();
+    const paymentDateOnly = paymentTimestamp.slice(0, 10);
 
     try {
       if (payModal.type === 'customer') {
@@ -427,6 +430,7 @@ export function PendingPayments() {
           account_type: method,
           amount: effectiveAmount,
           note: note.trim() || `Payment for ${order?.order_number || 'Invoice'}`,
+          created_at: paymentTimestamp,
         });
 
         if (method !== 'credit') {
@@ -440,6 +444,8 @@ export function PendingPayments() {
             reference_type: 'order',
             reference_id: payModal.id,
             note: note.trim() || `Payment for ${order?.order_number || 'Invoice'}`,
+            date: paymentDateOnly,
+            created_at: paymentTimestamp,
           });
         }
         if (order?.customer_id) {
@@ -469,6 +475,7 @@ export function PendingPayments() {
           account_type: method,
           amount: effectiveAmount,
           note: note.trim() || `Payment for ${po?.po_number || 'PO'}`,
+          created_at: paymentTimestamp,
         });
 
         if (method !== 'credit') {
@@ -482,6 +489,8 @@ export function PendingPayments() {
             reference_type: 'purchase',
             reference_id: payModal.id,
             note: note.trim() || `Payment for ${po?.po_number || 'PO'}`,
+            date: paymentDateOnly,
+            created_at: paymentTimestamp,
           });
         }
         if (po?.supplier_id) {
@@ -1421,6 +1430,16 @@ export function PendingPayments() {
   );
 }
 
+function formatLocalISO(d: Date = new Date()) {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const year = d.getFullYear();
+  const month = pad(d.getMonth() + 1);
+  const day = pad(d.getDate());
+  const hours = pad(d.getHours());
+  const minutes = pad(d.getMinutes());
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
 function PayModal({
   modal,
   onClose,
@@ -1430,19 +1449,21 @@ function PayModal({
 }: {
   modal: any;
   onClose: () => void;
-  onPay: (m: string, a: number, note: string) => void;
+  onPay: (m: string, a: number, note: string, paymentDate?: string) => void;
   symbol: string;
   submitting?: boolean;
 }) {
   const [method, setMethod] = useState('cash');
   const [amount, setAmount] = useState<number | string>('');
   const [note, setNote] = useState('');
+  const [paymentDateTime, setPaymentDateTime] = useState(formatLocalISO());
 
   useEffect(() => {
     if (modal) {
       setAmount(modal.amount ?? '');
       setMethod('cash');
       setNote('');
+      setPaymentDateTime(formatLocalISO());
     }
   }, [modal]);
 
@@ -1457,7 +1478,8 @@ function PayModal({
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (numAmount <= 0 || submitting) return;
-    onPay(method, numAmount, note);
+    const paymentISO = paymentDateTime ? new Date(paymentDateTime).toISOString() : new Date().toISOString();
+    onPay(method, numAmount, note, paymentISO);
   };
 
   return (
@@ -1465,7 +1487,7 @@ function PayModal({
       open={!!modal}
       onClose={() => !submitting && onClose()}
       title={`${modal.type === 'customer' ? 'Receive Payment' : 'Pay Supplier'} — ${modal.name}`}
-      size="sm"
+      size="md"
       footer={
         <>
           <Button variant="outline" type="button" onClick={onClose} disabled={submitting}>
@@ -1526,14 +1548,27 @@ function PayModal({
           </div>
         )}
 
-        <Field label="Payment Method">
-          <Select value={method} onChange={(e) => setMethod(e.target.value)}>
-            <option value="cash">Cash</option>
-            <option value="bank">Bank</option>
-            <option value="jazzcash">JazzCash</option>
-            <option value="easypaisa">EasyPaisa</option>
-          </Select>
-        </Field>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Field label="Payment Method">
+            <Select value={method} onChange={(e) => setMethod(e.target.value)}>
+              <option value="cash">Cash</option>
+              <option value="bank">Bank</option>
+              <option value="jazzcash">JazzCash</option>
+              <option value="easypaisa">EasyPaisa</option>
+            </Select>
+          </Field>
+
+          <Field
+            label="Payment Date & Time"
+            hint="Set if backdating / offline receipt"
+          >
+            <Input
+              type="datetime-local"
+              value={paymentDateTime}
+              onChange={(e) => setPaymentDateTime(e.target.value)}
+            />
+          </Field>
+        </div>
 
         <Field label="Note / Remarks (Optional)">
           <Input
@@ -1545,7 +1580,7 @@ function PayModal({
 
         <div className="flex items-center gap-1.5 text-[11px] text-slate-600 bg-sky-50 px-3 py-2 rounded-lg border border-sky-100">
           <Clock size={14} className="shrink-0 text-sky-600" />
-          <span>Payment will be timestamped with current date and time in history.</span>
+          <span>Payment will be timestamped with the specified date and time in history and collection reports.</span>
         </div>
       </form>
     </Modal>

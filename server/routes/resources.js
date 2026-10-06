@@ -310,9 +310,10 @@ export function createResourceRouter() {
     const table = cfg.table || key;
     const restore = req.query.restore === '1' || req.query.restore === 'true';
     const incomingId = restore && req.body?.id ? String(req.body.id) : null;
+    const incomingCreatedAt = req.body?.created_at ? String(req.body.created_at) : null;
     const data = prepareInsert(key, req.body || {}, { keepId: false });
     const id = incomingId || uuid();
-    const now = nowISO();
+    const now = incomingCreatedAt || nowISO();
 
     // Opening balance → balance for customers/suppliers
     if ((key === 'customers' || key === 'suppliers') && data.opening_balance != null) {
@@ -336,6 +337,22 @@ export function createResourceRouter() {
       );
       if (duplicate) {
         return res.status(200).json(mapRow(key, duplicate));
+      }
+    }
+
+    // Customer attribution safeguard: orders with customer_id must snapshot customer details and never default to 'Walk-in'
+    if (key === 'orders' && data.customer_id) {
+      const cust = queryOne(`SELECT name, phone, area FROM customers WHERE id = ?`, [data.customer_id]);
+      if (cust) {
+        if (!data.customer_name || data.customer_name === 'Walk-in' || String(data.customer_name).trim() === '') {
+          data.customer_name = cust.name;
+        }
+        if (!data.customer_phone && cust.phone) {
+          data.customer_phone = cust.phone;
+        }
+        if (!data.customer_area && cust.area) {
+          data.customer_area = cust.area;
+        }
       }
     }
 

@@ -1,10 +1,12 @@
 import { type ReactNode, useEffect, useState, useCallback } from 'react';
 
+const getRoutePath = () => (window.location.hash.slice(1) || '/').split('?')[0] || '/';
+
 export function useHashRoute(): [string, (path: string) => void] {
-  const [route, setRoute] = useState(() => window.location.hash.slice(1) || '/');
+  const [route, setRoute] = useState(getRoutePath);
 
   useEffect(() => {
-    const handler = () => setRoute(window.location.hash.slice(1) || '/');
+    const handler = () => setRoute(getRoutePath());
     window.addEventListener('hashchange', handler);
     return () => window.removeEventListener('hashchange', handler);
   }, []);

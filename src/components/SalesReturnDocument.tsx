@@ -6,6 +6,8 @@ export interface ReturnDocumentItem {
   product_name: string;
   quantity: number;
   unit_price: number;
+  original_price?: number;
+  discount?: number;
   total_amount: number;
   unit?: string;
   reason?: string;
@@ -492,7 +494,12 @@ export function SalesReturnDocument({
                   {it.quantity}
                 </td>
                 <td style={{ textAlign: 'right' }}>
-                  {fmt(it.unit_price)}
+                  <div style={{ fontWeight: 700 }}>{fmt(it.unit_price)}</div>
+                  {it.discount && it.discount > 0 ? (
+                    <div style={{ fontSize: '7px', color: '#059669', fontWeight: 700 }}>
+                      (-{fmt(it.discount)} disc)
+                    </div>
+                  ) : null}
                 </td>
                 <td style={{ textAlign: 'right', fontWeight: 900, color: '#991b1b' }}>
                   {fmt(it.total_amount)}

@@ -42,11 +42,11 @@ export const PRODUCT_MONEY = [
 
 export const CUSTOMER_MONEY = ['balance', 'loyalty_points', 'credit_limit', 'opening_balance', 'custom_price'];
 export const SUPPLIER_MONEY = ['balance', 'opening_balance'];
-export const ORDER_MONEY = ['subtotal', 'discount', 'tax', 'total', 'paid_amount'];
+export const ORDER_MONEY = ['subtotal', 'discount', 'tax', 'total', 'paid_amount', 'store_credit_used', 'previous_balance'];
 export const ORDER_ITEM_MONEY = ['unit_price', 'discount', 'tax', 'total', 'cost_price', 'total_cost'];
 export const ORDER_PAYMENT_MONEY = ['amount'];
 export const SUPPLIER_PAYMENT_MONEY = ['amount'];
-export const PO_MONEY = ['subtotal', 'tax', 'total', 'paid_amount', 'discount'];
+export const PO_MONEY = ['subtotal', 'tax', 'total', 'paid_amount', 'discount', 'supplier_credit_used'];
 export const PO_ITEM_MONEY = ['unit_cost', 'total', 'retail_price', 'wholesale_price', 'dealer_price'];
 export const EXPENSE_MONEY = ['amount'];
 export const ACCOUNT_MONEY = ['balance'];

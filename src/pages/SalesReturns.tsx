@@ -52,6 +52,8 @@ interface ReturnItemPayload {
   product_name: string;
   quantity: number;
   unit_price: number;
+  original_price?: number;
+  discount?: number;
   unit: string;
   reason: string;
   total_amount: number;
@@ -179,6 +181,8 @@ export function SalesReturns() {
         product_name: it.product_name,
         quantity: it.quantity,
         unit_price: it.unit_price,
+        original_price: it.original_price,
+        discount: it.discount,
         total_amount: it.total_amount,
         unit: it.unit || 'Carton',
         reason: it.reason,
@@ -818,7 +822,9 @@ interface ItemRowState {
   item_id: string;
   product_id: string | null;
   product_name: string;
+  original_price?: number;
   unit_price: number;
+  discount?: number;
   unit: string;
   soldQty: number;
   alreadyReturned: number;
@@ -926,6 +932,13 @@ function MultiItemReturnForm({
     }
 
     const itemsForOrder = orderItems.filter((it) => it.order_id === orderId);
+    const orderObj = orders.find((o) => o.id === orderId);
+    const orderSubtotal = Number(orderObj?.subtotal || 0);
+    const orderTotal = Number(orderObj?.total || 0);
+    // If order had an overall discount, scale item rates proportionally:
+    const orderScale = (orderSubtotal > 0 && orderTotal > 0 && orderTotal < orderSubtotal)
+      ? (orderTotal / orderSubtotal)
+      : 1;
 
     const rows: ItemRowState[] = itemsForOrder.map((it) => {
       const alreadyReturned = existingReturns
@@ -939,12 +952,24 @@ function MultiItemReturnForm({
 
       const soldQty = Number(it.quantity || 0);
       const remainingReturnable = Math.max(0, soldQty - alreadyReturned);
+      const catalogPrice = Number(it.unit_price || 0);
+      const lineTotal = Number(it.total || 0);
+      const lineDisc = Number(it.discount || 0);
+
+      // Effective Net Rate billed to customer per unit:
+      const baseNetRate = soldQty > 0
+        ? (lineTotal > 0 ? lineTotal / soldQty : Math.max(0, catalogPrice - (lineDisc / soldQty)))
+        : catalogPrice;
+      const effectiveNetRate = Math.round(baseNetRate * orderScale * 100) / 100;
+      const unitDiscount = catalogPrice > effectiveNetRate ? Math.round((catalogPrice - effectiveNetRate) * 100) / 100 : 0;
 
       return {
         item_id: it.id,
         product_id: it.product_id || null,
         product_name: it.product_name || 'Product',
-        unit_price: Number(it.unit_price || 0),
+        original_price: catalogPrice,
+        unit_price: effectiveNetRate,
+        discount: unitDiscount,
         unit: it.unit || 'carton',
         soldQty,
         alreadyReturned,
@@ -956,7 +981,7 @@ function MultiItemReturnForm({
     });
 
     setRowStates(rows);
-  }, [orderId, orderItems, existingReturns]);
+  }, [orderId, orderItems, existingReturns, orders]);
 
   // Toggle Selection of an item
   const toggleSelect = (itemId: string) => {
@@ -1041,9 +1066,11 @@ function MultiItemReturnForm({
       product_name: r.product_name,
       quantity: r.returnQty,
       unit_price: r.unit_price,
+      original_price: r.original_price,
+      discount: r.discount,
       unit: r.unit,
       reason: r.reason,
-      total_amount: r.returnQty * r.unit_price,
+      total_amount: Math.round(r.returnQty * r.unit_price * 100) / 100,
     }));
 
     onCreate({
@@ -1351,7 +1378,12 @@ function MultiItemReturnForm({
                             </td>
 
                             <td className="py-2 px-2.5 text-right font-medium text-slate-700">
-                              {formatCurrency(row.unit_price, symbol)}
+                              <div>{formatCurrency(row.unit_price, symbol)}</div>
+                              {row.original_price && row.original_price > row.unit_price && (
+                                <div className="text-[10px] text-emerald-600 font-semibold line-through opacity-70">
+                                  {formatCurrency(row.original_price, symbol)}
+                                </div>
+                              )}
                             </td>
 
                             <td className="py-1.5 px-2.5">

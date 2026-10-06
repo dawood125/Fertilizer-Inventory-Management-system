@@ -10,6 +10,7 @@ import { Modal, ConfirmModal } from '@/components/Modal';
 import { Pagination } from '@/components/Pagination';
 import { PrintPreview } from '@/components/PrintPreview';
 import { PrintDocument, PrintTd, PrintTh } from '@/components/PrintDocument';
+import { PurchaseOrderDocument } from '@/components/PurchaseOrderDocument';
 import { formatCurrency, formatDateTime, generateDocNumber, cn } from '@/lib/utils';
 import { sanitizePdfName } from '@/lib/printPdf';
 import { receiveStockBatch } from '@/lib/fifo';
@@ -195,15 +196,28 @@ export function PurchaseOrders() {
           }
         }
       }
-      // Increase supplier payable balance on receive (goods received = liability)
+      // Synchronize supplier payable balance directly from live PO dues and returns
       if (po.supplier_id) {
-        const sup = await api.get<any>(`/api/data/suppliers/${po.supplier_id}`);
-        if (sup) {
-          const due = Math.max(0, Number(po.total) - Number(po.paid_amount || 0));
-          await api.put(`/api/data/suppliers/${po.supplier_id}`, {
-            balance: Number(sup.balance || 0) + due,
-          });
-        }
+        const [allPOs, allReturns] = await Promise.all([
+          api.get<any[]>('/api/data/purchase_orders').catch(() => []),
+          api.get<any[]>('/api/data/purchase_returns').catch(() => []),
+        ]);
+        const sPOs = (allPOs || [])
+          .map((p) => (p.id === po.id ? { ...p, status: 'received' } : p))
+          .filter((p) => p.supplier_id === po.supplier_id);
+        const sReturns = (allReturns || []).filter(
+          (r) => r.supplier_id === po.supplier_id && (r.resolution === 'credit' || !r.resolution)
+        );
+        const totalDue = sPOs.reduce(
+          (acc, p) => acc + Math.max(0, Number(p.total || 0) - Number(p.paid_amount || 0)),
+          0
+        );
+        const creditReturns = sReturns.reduce((acc, r) => acc + Number(r.total_amount || 0), 0);
+        const synchronizedBal = totalDue - creditReturns;
+
+        await api.put(`/api/data/suppliers/${po.supplier_id}`, {
+          balance: synchronizedBal,
+        });
       }
       await api.put(`/api/data/purchase_orders/${po.id}`, {
         status: 'received',
@@ -606,50 +620,29 @@ export function PurchaseOrders() {
           size="lg"
           fileName={`po_${sanitizePdfName(viewOrder.po_number)}.pdf`}
         >
-          <PrintDocument
-            storeName={settings?.store_name || 'Purchase Order'}
-            subtitle="Purchase Order"
+          <PurchaseOrderDocument
+            storeName={settings?.store_name}
+            phone={settings?.phone}
+            address={settings?.address}
+            ntn={settings?.ntn}
             logoSrc={logoSrc}
-            fields={[
-              { label: 'Business', value: settings?.store_name || '—' },
-              { label: 'Address', value: settings?.address || '—', span: 2 },
-              { label: 'Phone', value: settings?.phone || '—' },
-              { label: 'Business NTN', value: settings?.ntn?.trim() || '—' },
-              { label: 'PO #', value: viewOrder.po_number },
-            ]}
-          >
-            <div className="mb-4 grid grid-cols-2 gap-4 text-xs">
-              <div><p className="text-slate-400">Supplier</p><p className="font-medium">{viewOrder.suppliers?.name || '—'}</p></div>
-              <div><p className="text-slate-400">Date</p><p className="font-medium">{formatDateTime(viewOrder.created_at)}</p></div>
-            </div>
-            <table className="w-full border-collapse text-xs">
-              <thead>
-                <tr className="bg-rose-900 text-white">
-                  <PrintTh>Product</PrintTh>
-                  <PrintTh>Batch #</PrintTh>
-                  <PrintTh align="right">Qty (Pcs)</PrintTh>
-                  <PrintTh align="right">Cost / Pc</PrintTh>
-                  <PrintTh align="right">Total</PrintTh>
-                </tr>
-              </thead>
-              <tbody>
-                {viewOrder.items?.map((it: any) => (
-                  <tr key={it.id}>
-                    <PrintTd>{it.product_name}</PrintTd>
-                    <PrintTd>{it.batch_number || '—'}</PrintTd>
-                    <PrintTd align="right">{it.quantity}</PrintTd>
-                    <PrintTd align="right">{formatCurrency(it.unit_cost, symbol)}</PrintTd>
-                    <PrintTd align="right" className="font-medium">{formatCurrency(it.total, symbol)}</PrintTd>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="mt-4 space-y-1 text-xs">
-              <div className="flex justify-between text-slate-500"><span>Subtotal</span><span>{formatCurrency(viewOrder.subtotal, symbol)}</span></div>
-              {Number(viewOrder.tax) > 0 && <div className="flex justify-between text-slate-500"><span>Tax</span><span>{formatCurrency(viewOrder.tax, symbol)}</span></div>}
-              <div className="flex justify-between border-t border-slate-200 pt-1.5 text-base font-bold"><span>Total</span><span>{formatCurrency(viewOrder.total, symbol)}</span></div>
-            </div>
-          </PrintDocument>
+            symbol={symbol}
+            poNumber={viewOrder.po_number}
+            poDate={viewOrder.created_at}
+            status={viewOrder.status}
+            paymentStatus={viewOrder.payment_status}
+            note={viewOrder.note}
+            approvedBy={viewOrder.approved_by}
+            requestedBy={viewOrder.requested_by}
+            receivedDate={viewOrder.received_date}
+            supplier={viewOrder.suppliers}
+            items={viewOrder.items || []}
+            subtotal={Number(viewOrder.subtotal || 0)}
+            tax={Number(viewOrder.tax || 0)}
+            total={Number(viewOrder.total || 0)}
+            paidAmount={Number(viewOrder.paid_amount || 0)}
+            paperSize={settings?.receipt_size === 'A4' ? 'A4' : 'A5'}
+          />
         </PrintPreview>
       )}
     </div>
@@ -686,6 +679,7 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
   const [showCsvModal, setShowCsvModal] = useState(false);
   const [showQuickProductModal, setShowQuickProductModal] = useState(false);
   const [quickProductName, setQuickProductName] = useState('');
+  const [settleSupplierCredit, setSettleSupplierCredit] = useState(true);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
@@ -715,6 +709,7 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
       setShowCsvModal(false);
       setShowQuickProductModal(false);
       setQuickProductName('');
+      setSettleSupplierCredit(true);
     }
   }, [open]);
 
@@ -827,6 +822,13 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
   const selectedSupplier = suppliers.find((s) => s.id === supplierId);
   const brandMap = new Map((brands || []).map((b) => [b.id, b]));
 
+  const availableCredit = (selectedSupplier && Number(selectedSupplier.balance || 0) < 0)
+    ? Math.abs(Number(selectedSupplier.balance || 0))
+    : 0;
+  const supplierCreditSettled = (settleSupplierCredit && availableCredit > 0)
+    ? Math.min(availableCredit, total)
+    : 0;
+
   const getProductImage = (p: Product) => {
     if (p.image_url) {
       return resolveImageUrl(p.image_url) || p.image_url;
@@ -855,18 +857,25 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
     setSavingPO(true);
     try {
       const poNumber = generateDocNumber('PO');
+      const initialPaid = supplierCreditSettled;
+      const initialPaymentStatus = initialPaid >= total
+        ? 'paid'
+        : (initialPaid > 0 ? 'partial' : 'unpaid');
+
       const po = await api.post<any>('/api/data/purchase_orders', {
         po_number: poNumber,
         supplier_id: supplierId || null,
         subtotal,
         tax: 0,
         total,
-        paid_amount: 0,
+        paid_amount: initialPaid,
+        supplier_credit_used: supplierCreditSettled,
         status: 'pending',
-        payment_status: 'unpaid',
+        payment_status: initialPaymentStatus,
         note,
         requested_by: user?.name || null,
       });
+
       for (const l of lines) {
         await api.post('/api/data/purchase_items', {
           purchase_id: po.id,
@@ -883,6 +892,22 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
           pieces_per_carton: l.pieces_per_carton || 1,
         });
       }
+
+      // If supplier advance credit was settled, update supplier balance and record payment entry
+      if (supplierCreditSettled > 0 && supplierId && selectedSupplier) {
+        await api.put(`/api/data/suppliers/${supplierId}`, {
+          balance: Number(selectedSupplier.balance) + supplierCreditSettled,
+        });
+        await api.post('/api/data/supplier_payments', {
+          purchase_id: po.id,
+          supplier_id: supplierId,
+          method: 'advance_credit',
+          account_type: 'credit',
+          amount: supplierCreditSettled,
+          note: `Advance credit settled on PO ${poNumber}`,
+        });
+      }
+
       notify('Purchase order created successfully', 'success');
       onClose(); onCreated();
     } catch {
@@ -918,7 +943,11 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
               Cancel
             </Button>
             <Button size="sm" onClick={save} disabled={lines.length === 0 || savingPO} className="flex-1 sm:flex-initial">
-              {savingPO ? 'Creating...' : `Create PO (${formatCurrency(total, symbol)})`}
+              {savingPO
+                ? 'Creating...'
+                : supplierCreditSettled > 0
+                ? `Create PO (${formatCurrency(total, symbol)} · Settled ${formatCurrency(supplierCreditSettled, symbol)})`
+                : `Create PO (${formatCurrency(total, symbol)})`}
             </Button>
           </div>
         </div>
@@ -962,6 +991,27 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
                   {formatCurrency(selectedSupplier.balance || 0, symbol)}
                 </strong>
               </span>
+            </div>
+          )}
+
+          {selectedSupplier && availableCredit > 0 && (
+            <div className="flex items-center justify-between rounded-xl bg-emerald-50 border border-emerald-200 p-2.5 text-xs text-emerald-900 mt-1">
+              <div className="flex items-center gap-2">
+                <Wallet size={15} className="text-emerald-700 shrink-0" />
+                <span>
+                  Supplier Advance Credit Available (Due to Us):{' '}
+                  <strong className="text-emerald-800 font-bold">{formatCurrency(availableCredit, symbol)}</strong>
+                </span>
+              </div>
+              <label className="flex items-center gap-1.5 font-semibold text-emerald-800 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={settleSupplierCredit}
+                  onChange={(e) => setSettleSupplierCredit(e.target.checked)}
+                  className="rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                />
+                <span>Settle against this PO</span>
+              </label>
             </div>
           )}
         </div>
@@ -1868,11 +1918,29 @@ export function Suppliers() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [data, acc] = await Promise.all([
+      const [data, acc, pos, returns] = await Promise.all([
         api.get<Supplier[]>('/api/data/suppliers'),
         api.get<any[]>('/api/data/payment_accounts'),
+        api.get<any[]>('/api/data/purchase_orders').catch(() => []),
+        api.get<any[]>('/api/data/purchase_returns').catch(() => []),
       ]);
-      setItems((data || []).sort((a, b) => a.name.localeCompare(b.name)));
+
+      const reconciledSuppliers = (data || []).map((s) => {
+        const sPOs = (pos || []).filter((p) => p.supplier_id === s.id);
+        const sReturns = (returns || []).filter((r) => r.supplier_id === s.id && (r.resolution === 'credit' || !r.resolution));
+        if (sPOs.length > 0 || sReturns.length > 0) {
+          const totalDue = sPOs.reduce((acc, p) => acc + Math.max(0, Number(p.total || 0) - Number(p.paid_amount || 0)), 0);
+          const creditReturns = sReturns.reduce((acc, r) => acc + Number(r.total_amount || 0), 0);
+          const trueBal = totalDue - creditReturns;
+          if (Math.abs(Number(s.balance || 0) - trueBal) > 0.01) {
+            api.put(`/api/data/suppliers/${s.id}`, { balance: trueBal }).catch(() => {});
+            return { ...s, balance: trueBal };
+          }
+        }
+        return s;
+      });
+
+      setItems(reconciledSuppliers.sort((a, b) => a.name.localeCompare(b.name)));
       setAccounts(acc || []);
     } catch {
       setItems([]);
@@ -1909,6 +1977,12 @@ export function Suppliers() {
         .filter((r) => r.supplier_id === s.id)
         .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
 
+      const supPOs = (pos || []).filter((p) => p.supplier_id === s.id);
+      const supApprovedReturns = (returns || []).filter((r) => r.supplier_id === s.id && (r.resolution === 'credit' || !r.resolution));
+      const totalDue = supPOs.reduce((acc, p) => acc + Math.max(0, Number(p.total || 0) - Number(p.paid_amount || 0)), 0);
+      const creditReturns = supApprovedReturns.reduce((acc, r) => acc + Number(r.total_amount || 0), 0);
+      const reconciledBalance = (supPOs.length > 0 || supApprovedReturns.length > 0) ? (totalDue - creditReturns) : Number(s.balance || 0);
+
       // Combined chronological ledger stream
       const allEvents: any[] = [
         ...supPurchases.map((p) => ({
@@ -1944,7 +2018,7 @@ export function Suppliers() {
       ].sort((a, b) => String(b.date).localeCompare(String(a.date)));
 
       setViewing({
-        supplier: s,
+        supplier: { ...s, balance: reconciledBalance },
         purchases: supPurchases,
         payments: supPayments,
         returns: supReturns,

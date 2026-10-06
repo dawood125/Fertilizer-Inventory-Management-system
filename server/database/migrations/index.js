@@ -36,6 +36,7 @@ export function runMigrations(db) {
     { name: '014_user_permissions_and_po_approval', sql: MIGRATION_014 },
     { name: '015_preserve_customer_order_snapshot', sql: MIGRATION_015 },
     { name: '016_order_due_date', sql: MIGRATION_016 },
+    { name: '017_store_and_supplier_credits', sql: MIGRATION_017 },
   ];
 
   for (const m of migrations) {
@@ -598,3 +599,10 @@ const MIGRATION_016 = `
 ALTER TABLE orders ADD COLUMN due_date TEXT;
 CREATE INDEX IF NOT EXISTS idx_orders_due_date ON orders(due_date);
 `;
+
+const MIGRATION_017 = `
+ALTER TABLE orders ADD COLUMN store_credit_used INTEGER DEFAULT 0;
+ALTER TABLE orders ADD COLUMN previous_balance INTEGER DEFAULT NULL;
+ALTER TABLE purchase_orders ADD COLUMN supplier_credit_used INTEGER DEFAULT 0;
+`;
+
