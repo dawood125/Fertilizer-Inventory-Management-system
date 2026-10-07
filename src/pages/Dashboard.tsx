@@ -3,7 +3,7 @@ import { useSettings } from '@/context/SettingsContext';
 import { StatCard, BarChart, DonutChart } from '@/components/Charts';
 import { Card, Spinner, PageHeader, Badge } from '@/components/ui';
 import { Button } from '@/components/Button';
-import { formatCurrency, formatDateTime, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDateTime, formatDate, cn } from '@/lib/utils';
 import { Link } from '@/lib/router';
 import {
   TrendingUp, TrendingDown, DollarSign, Wallet, Landmark, Smartphone, ShoppingBag,
@@ -12,7 +12,17 @@ import {
 } from 'lucide-react';
 
 export function Dashboard({ navigate }: { navigate: (path: string) => void }) {
-  const { stats, salesData, topProducts, categorySales, recentActivity, overdueCustomers, loading } = useDashboardData();
+  const {
+    stats,
+    salesData,
+    topProducts,
+    categorySales,
+    recentActivity,
+    overdueCustomers,
+    loading,
+    timeframe,
+    setTimeframe,
+  } = useDashboardData();
   const { symbol } = useSettings();
 
   if (loading || !stats) {
@@ -43,13 +53,71 @@ export function Dashboard({ navigate }: { navigate: (path: string) => void }) {
 
   return (
     <div>
-      <PageHeader title="Dashboard" subtitle="Overview of your store performance" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Dashboard</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Overview of your store performance</p>
+        </div>
+
+        {/* Timeframe Selector Bar */}
+        <div className="inline-flex items-center gap-1 rounded-2xl bg-slate-100 p-1 border border-slate-200/80 shadow-2xs self-start sm:self-auto">
+          {[
+            { key: 'last_30_days', label: 'Last 30 Days' },
+            { key: 'this_month', label: `This Month (${new Date().toLocaleString('en', { month: 'short' })})` },
+            { key: 'last_month', label: `Last Month (${stats.lastMonthLabel})` },
+            { key: 'all', label: 'All Time' },
+          ].map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setTimeframe(t.key as any)}
+              className={cn(
+                'rounded-xl px-3 py-1.5 text-xs font-semibold transition cursor-pointer',
+                timeframe === t.key
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200/50'
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Top stats */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        <StatCard label="Today's Sales" value={fmt(stats.todaySales)} icon={<DollarSign size={20} />} color="sky" onClick={() => navigate('/reports')} />
-        <StatCard label="Monthly Sales" value={fmt(stats.monthlySales)} icon={<TrendingUp size={20} />} color="emerald" onClick={() => navigate('/reports')} />
-        <StatCard label="Monthly Expenses" value={fmt(stats.monthlyExpenses)} icon={<Receipt size={20} />} color="rose" onClick={() => navigate('/expenses')} />
+        <StatCard
+          label="Today's Sales"
+          value={fmt(stats.todaySales)}
+          subtitle={stats.todaySales === 0 ? "No sales today yet" : undefined}
+          icon={<DollarSign size={20} />}
+          color="sky"
+          onClick={() => navigate('/reports')}
+        />
+        <StatCard
+          label={`${stats.periodLabel} Sales`}
+          value={fmt(stats.periodSales)}
+          subtitle={
+            timeframe === 'this_month' && stats.lastMonthSales > 0
+              ? `Last Month: ${fmt(stats.lastMonthSales)}`
+              : `${stats.periodOrdersCount} order${stats.periodOrdersCount !== 1 ? 's' : ''}`
+          }
+          icon={<TrendingUp size={20} />}
+          color="emerald"
+          onClick={() => navigate('/reports')}
+        />
+        <StatCard
+          label={`${stats.periodLabel} Expenses`}
+          value={fmt(stats.periodExpenses)}
+          subtitle={
+            timeframe === 'this_month' && stats.lastMonthExpenses > 0
+              ? `Last Month: ${fmt(stats.lastMonthExpenses)}`
+              : undefined
+          }
+          icon={<Receipt size={20} />}
+          color="rose"
+          onClick={() => navigate('/expenses')}
+        />
         <StatCard 
           label={stats.todayProfit < 0 ? "Today's Net Loss" : "Today's Net Profit"} 
           value={fmt(Math.abs(stats.todayProfit))} 
@@ -58,24 +126,24 @@ export function Dashboard({ navigate }: { navigate: (path: string) => void }) {
           onClick={() => navigate('/reports')} 
         />
         <StatCard 
-          label={stats.monthlyProfit < 0 ? "Monthly Net Loss" : "Monthly Net Profit"} 
-          value={fmt(Math.abs(stats.monthlyProfit))} 
-          icon={stats.monthlyProfit < 0 ? <TrendingDown size={20} /> : <TrendingUp size={20} />} 
-          color={stats.monthlyProfit < 0 ? "rose" : "emerald"} 
+          label={stats.periodProfit < 0 ? `${stats.periodLabel} Net Loss` : `${stats.periodLabel} Net Profit`} 
+          value={fmt(Math.abs(stats.periodProfit))} 
+          icon={stats.periodProfit < 0 ? <TrendingDown size={20} /> : <TrendingUp size={20} />} 
+          color={stats.periodProfit < 0 ? "rose" : "emerald"} 
           onClick={() => navigate('/reports')} 
         />
       </div>
 
-      {stats.monthlyProfit < 0 && (
+      {stats.periodProfit < 0 && (
         <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 shadow-sm">
           <div className="flex items-start gap-3">
             <div className="mt-0.5 rounded-full bg-rose-100 p-1 text-rose-600">
               <AlertTriangle size={20} />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-rose-800">Operating at a Loss</h3>
+              <h3 className="text-sm font-bold text-rose-800">Operating at a Loss ({stats.periodLabel})</h3>
               <p className="mt-1 text-sm text-rose-700">
-                The business is currently running at a net loss this month. Total expenses (<strong>{fmt(stats.monthlyExpenses)}</strong>) exceed the gross profit from sales (<strong>{fmt(stats.monthlyGrossProfit)}</strong>).
+                The business is currently running at a net loss in {stats.periodLabel}. Total expenses (<strong>{fmt(stats.periodExpenses)}</strong>) exceed the gross profit from sales (<strong>{fmt(stats.periodGrossProfit)}</strong>).
               </p>
             </div>
           </div>

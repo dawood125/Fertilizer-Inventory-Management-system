@@ -15,7 +15,7 @@
  * 11. Clean teardown of test records
  */
 
-const VPS_URL = 'http://13.140.166.116';
+const VPS_URL = process.env.VPS_URL || 'https://ibrahim-solution.com';
 
 function assert(condition, message) {
   if (!condition) {

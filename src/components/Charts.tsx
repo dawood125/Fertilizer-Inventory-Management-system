@@ -136,6 +136,7 @@ export function DonutChart({ data, size = 160, formatValue }: DonutChartProps) {
 export function StatCard({
   label,
   value,
+  subtitle,
   icon,
   trend,
   color = 'sky',
@@ -143,6 +144,7 @@ export function StatCard({
 }: {
   label: string;
   value: string;
+  subtitle?: string;
   icon: ReactNode;
   trend?: { value: string; up: boolean };
   color?: 'sky' | 'emerald' | 'amber' | 'rose' | 'violet' | 'slate';
@@ -162,6 +164,9 @@ export function StatCard({
         <div className="min-w-0">
           <p className="text-xs font-medium uppercase tracking-wider text-slate-400">{label}</p>
           <p className="mt-1.5 text-xl font-bold text-slate-800">{value}</p>
+          {subtitle && (
+            <p className="mt-0.5 text-[11px] font-medium text-slate-500 truncate">{subtitle}</p>
+          )}
           {trend && (
             <p className={`mt-1 text-xs font-medium ${trend.up ? 'text-emerald-600' : 'text-rose-500'}`}>
               {trend.up ? '↑' : '↓'} {trend.value}
