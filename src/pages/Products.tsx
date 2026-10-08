@@ -531,6 +531,10 @@ const initialFormState = {
   retail_price: 0,
   wholesale_price: 0,
   dealer_price: 0,
+  carton_purchase_price: 0,
+  carton_retail_price: 0,
+  carton_wholesale_price: 0,
+  carton_dealer_price: 0,
   special_price: 0,
   promotional_price: 0,
   min_selling_price: 0,
@@ -568,6 +572,12 @@ function ProductForm({ open, onClose, onSave, editing, categories, brands, compa
 
   useEffect(() => {
     if (editing) {
+      const ctnPacking = Number(editing.carton_to_box) > 0 ? Number(editing.carton_to_box) : 1;
+      const pBuy = Number(editing.purchase_price || editing.cost_price || 0);
+      const pRetail = Number(editing.retail_price || 0);
+      const pWholesale = Number(editing.wholesale_price || 0);
+      const pDealer = Number(editing.dealer_price || 0);
+
       setForm({
         name: editing.name,
         sku: editing.sku || '',
@@ -575,19 +585,23 @@ function ProductForm({ open, onClose, onSave, editing, categories, brands, compa
         category_id: editing.category_id || '',
         brand_id: editing.brand_id || '',
         company_id: editing.company_id || '',
-        purchase_price: editing.purchase_price || 0,
-        cost_price: editing.cost_price || 0,
-        retail_price: editing.retail_price || 0,
-        wholesale_price: editing.wholesale_price || 0,
-        dealer_price: editing.dealer_price || 0,
+        purchase_price: pBuy,
+        cost_price: pBuy,
+        retail_price: pRetail,
+        wholesale_price: pWholesale,
+        dealer_price: pDealer,
+        carton_purchase_price: Number((pBuy * ctnPacking).toFixed(2)),
+        carton_retail_price: Number((pRetail * ctnPacking).toFixed(2)),
+        carton_wholesale_price: Number((pWholesale * ctnPacking).toFixed(2)),
+        carton_dealer_price: Number((pDealer * ctnPacking).toFixed(2)),
         special_price: editing.special_price || 0,
         promotional_price: editing.promotional_price || 0,
         min_selling_price: editing.min_selling_price || 0,
         stock_quantity: editing.stock_quantity || 0,
         min_stock_level: editing.min_stock_level || 0,
-        unit: editing.unit || 'piece',
+        unit: editing.unit === 'carton' ? 'carton' : 'piece',
         status: editing.status || 'active',
-        carton_to_box: editing.carton_to_box || 1,
+        carton_to_box: ctnPacking,
         box_to_pack: editing.box_to_pack || 0,
         pack_to_piece: editing.pack_to_piece || 0,
         description: editing.description || '',
@@ -606,6 +620,47 @@ function ProductForm({ open, onClose, onSave, editing, categories, brands, compa
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
+  const handleCartonPackingChange = (newPackingVal: number) => {
+    const packing = Math.max(1, newPackingVal || 1);
+    setForm((prev) => {
+      const buyPiece = Number((prev.carton_purchase_price / packing).toFixed(2));
+      const dealerPiece = Number((prev.carton_dealer_price / packing).toFixed(2));
+      const wholesalePiece = Number((prev.carton_wholesale_price / packing).toFixed(2));
+      const retailPiece = Number((prev.carton_retail_price / packing).toFixed(2));
+      return {
+        ...prev,
+        carton_to_box: newPackingVal,
+        purchase_price: buyPiece,
+        cost_price: buyPiece,
+        dealer_price: dealerPiece,
+        wholesale_price: wholesalePiece,
+        retail_price: retailPiece,
+      };
+    });
+  };
+
+  const handleCartonPriceChange = (
+    field: 'carton_purchase_price' | 'carton_dealer_price' | 'carton_wholesale_price' | 'carton_retail_price',
+    val: number
+  ) => {
+    setForm((prev) => {
+      const packing = Math.max(1, Number(prev.carton_to_box) || 1);
+      const pieceVal = Number((val / packing).toFixed(2));
+      const next = { ...prev, [field]: val };
+      if (field === 'carton_purchase_price') {
+        next.purchase_price = pieceVal;
+        next.cost_price = pieceVal;
+      } else if (field === 'carton_dealer_price') {
+        next.dealer_price = pieceVal;
+      } else if (field === 'carton_wholesale_price') {
+        next.wholesale_price = pieceVal;
+      } else if (field === 'carton_retail_price') {
+        next.retail_price = pieceVal;
+      }
+      return next;
+    });
+  };
+
   const handleRegenerateSKU = () => {
     let prefix = 'PRD';
     if (form.category_id) {
@@ -618,8 +673,36 @@ function ProductForm({ open, onClose, onSave, editing, categories, brands, compa
   };
 
   const handleSubmit = () => {
+    const packing = Math.max(1, Number(form.carton_to_box) || 1);
+    const purchasePiece = form.carton_purchase_price > 0
+      ? Number((form.carton_purchase_price / packing).toFixed(2))
+      : form.purchase_price;
+    const dealerPiece = form.carton_dealer_price > 0
+      ? Number((form.carton_dealer_price / packing).toFixed(2))
+      : form.dealer_price;
+    const wholesalePiece = form.carton_wholesale_price > 0
+      ? Number((form.carton_wholesale_price / packing).toFixed(2))
+      : form.wholesale_price;
+    const retailPiece = form.carton_retail_price > 0
+      ? Number((form.carton_retail_price / packing).toFixed(2))
+      : form.retail_price;
+
+    const {
+      carton_purchase_price: _cpp,
+      carton_dealer_price: _cdp,
+      carton_wholesale_price: _cwp,
+      carton_retail_price: _crp,
+      ...cleanForm
+    } = form;
+
     const payload = {
-      ...form,
+      ...cleanForm,
+      purchase_price: purchasePiece,
+      cost_price: purchasePiece,
+      dealer_price: dealerPiece,
+      wholesale_price: wholesalePiece,
+      retail_price: retailPiece,
+      carton_to_box: packing,
       unit: form.unit || 'piece',
       category_id: form.category_id || null,
       brand_id: form.brand_id || null,
@@ -714,7 +797,7 @@ function ProductForm({ open, onClose, onSave, editing, categories, brands, compa
           </Field>
         </div>
 
-        {/* SKU & Unit */}
+        {/* SKU & Unit Dropdown (Piece, Carton) */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="SKU">
             <div className="flex gap-2">
@@ -734,12 +817,14 @@ function ProductForm({ open, onClose, onSave, editing, categories, brands, compa
               </button>
             </div>
           </Field>
-          <Field label="Unit">
-            <Input
-              value={form.unit}
+          <Field label="Unit" required>
+            <Select
+              value={form.unit || 'piece'}
               onChange={(e) => updateField('unit', e.target.value)}
-              placeholder="pcs, kg, box"
-            />
+            >
+              <option value="piece">Piece</option>
+              <option value="carton">Carton</option>
+            </Select>
           </Field>
         </div>
 
@@ -785,10 +870,39 @@ function ProductForm({ open, onClose, onSave, editing, categories, brands, compa
           />
         </Field>
 
-        {/* Pricing — all rates are per piece */}
+        {/* Packaging Specification */}
+        <div className="rounded-xl border border-sky-100 bg-sky-50/50 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Package size={17} className="text-sky-600" />
+            <h4 className="text-sm font-semibold text-slate-800">Packaging Specification</h4>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+            <Field label="Pieces in each Carton" required>
+              <Input
+                type="number"
+                min={1}
+                value={form.carton_to_box || ''}
+                onChange={(e) => handleCartonPackingChange(Number(e.target.value))}
+                placeholder="e.g. 20"
+              />
+            </Field>
+            <div className="text-xs text-slate-600 bg-white/80 p-3 rounded-lg border border-sky-200/60">
+              <p className="font-semibold text-sky-900">Conversion Ratio:</p>
+              <p className="mt-0.5">1 Carton = <strong>{form.carton_to_box || 1}</strong> Pieces</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Carton rates entered below are automatically divided by {form.carton_to_box || 1} to calculate per-piece prices.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Pricing & Cost — entered by Carton Rate */}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-semibold text-slate-700">Pricing & Cost (per piece)</p>
+            <div>
+              <p className="text-sm font-semibold text-slate-800">Pricing & Cost (Rate per Carton)</p>
+              <p className="text-xs text-slate-500">Enter carton rates — system automatically calculates piece prices below</p>
+            </div>
             {!canEditPrices && (
               <span className="text-[11px] font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded">
                 Price Locked: Admin Only
@@ -802,82 +916,65 @@ function ProductForm({ open, onClose, onSave, editing, categories, brands, compa
             </div>
           )}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="Purchase Price (Buy Rate / Piece)">
+            <Field label="Buy Rate / Carton">
               <Input
                 type="number"
-                value={form.purchase_price || ''}
+                value={form.carton_purchase_price || ''}
                 disabled={!canEditPrices}
-                onChange={(e) => {
-                  const val = Number(e.target.value);
-                  updateField('purchase_price', val);
-                  updateField('cost_price', val);
-                }}
-                placeholder="Buy rate per piece"
+                onChange={(e) => handleCartonPriceChange('carton_purchase_price', Number(e.target.value))}
+                placeholder="Buy rate per carton"
               />
+              <div className="mt-1 flex items-center justify-between text-[11px] font-medium text-slate-600 bg-slate-100 px-2 py-1 rounded">
+                <span>Piece Buy Rate:</span>
+                <span className="font-bold text-slate-800">Rs {form.purchase_price.toLocaleString()}</span>
+              </div>
             </Field>
-            <Field label="Dealer Rate / Piece">
-              <Input
-                type="number"
-                value={form.dealer_price || ''}
-                disabled={!canEditPrices}
-                onChange={(e) => updateField('dealer_price', Number(e.target.value))}
-                placeholder="Dealer"
-              />
-            </Field>
-            <Field label="Wholesale Rate / Piece">
-              <Input
-                type="number"
-                value={form.wholesale_price || ''}
-                disabled={!canEditPrices}
-                onChange={(e) => updateField('wholesale_price', Number(e.target.value))}
-                placeholder="Wholesale"
-              />
-            </Field>
-            <Field label="Retail Rate / Piece">
-              <Input
-                type="number"
-                value={form.retail_price || ''}
-                disabled={!canEditPrices}
-                onChange={(e) => updateField('retail_price', Number(e.target.value))}
-                placeholder="Retail"
-              />
-            </Field>
-          </div>
-          <p className="mt-1.5 text-[11px] text-slate-500">
-            * <strong>Purchase Price</strong> is the buy cost per piece. It automatically updates when Purchase Orders are received.
-          </p>
-          {Number(form.carton_to_box) > 0 && Number(form.retail_price) > 0 && (
-            <p className="mt-2 text-xs text-slate-500">
-              Derived carton rate (Retail):{' '}
-              <span className="font-semibold text-slate-700">
-                {formatCurrency(cartonRateFromPiece(Number(form.retail_price), Number(form.carton_to_box)), 'Rs')}
-              </span>
-              {' '}· wholesale carton:{' '}
-              <span className="font-semibold text-slate-700">
-                {formatCurrency(cartonRateFromPiece(Number(form.wholesale_price), Number(form.carton_to_box)), 'Rs')}
-              </span>
-              {' '}· dealer carton:{' '}
-              <span className="font-semibold text-slate-700">
-                {formatCurrency(cartonRateFromPiece(Number(form.dealer_price), Number(form.carton_to_box)), 'Rs')}
-              </span>
-            </p>
-          )}
-        </div>
 
-        {/* Unit Conversions */}
-        <div>
-          <p className="mb-2 text-sm font-semibold text-slate-700">Packaging & Stock Conversion</p>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Pieces per Carton">
+            <Field label="Dealer Rate / Carton">
               <Input
                 type="number"
-                value={form.carton_to_box || ''}
-                onChange={(e) => updateField('carton_to_box', Number(e.target.value))}
-                placeholder="e.g. 20"
+                value={form.carton_dealer_price || ''}
+                disabled={!canEditPrices}
+                onChange={(e) => handleCartonPriceChange('carton_dealer_price', Number(e.target.value))}
+                placeholder="Dealer carton rate"
               />
+              <div className="mt-1 flex items-center justify-between text-[11px] font-medium text-sky-700 bg-sky-50 px-2 py-1 rounded">
+                <span>Piece Dealer:</span>
+                <span className="font-bold text-sky-800">Rs {form.dealer_price.toLocaleString()}</span>
+              </div>
+            </Field>
+
+            <Field label="Wholesale Rate / Carton">
+              <Input
+                type="number"
+                value={form.carton_wholesale_price || ''}
+                disabled={!canEditPrices}
+                onChange={(e) => handleCartonPriceChange('carton_wholesale_price', Number(e.target.value))}
+                placeholder="Wholesale carton rate"
+              />
+              <div className="mt-1 flex items-center justify-between text-[11px] font-medium text-violet-700 bg-violet-50 px-2 py-1 rounded">
+                <span>Piece Wholesale:</span>
+                <span className="font-bold text-violet-800">Rs {form.wholesale_price.toLocaleString()}</span>
+              </div>
+            </Field>
+
+            <Field label="Retail Rate / Carton">
+              <Input
+                type="number"
+                value={form.carton_retail_price || ''}
+                disabled={!canEditPrices}
+                onChange={(e) => handleCartonPriceChange('carton_retail_price', Number(e.target.value))}
+                placeholder="Retail carton rate"
+              />
+              <div className="mt-1 flex items-center justify-between text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-1 rounded">
+                <span>Piece Retail:</span>
+                <span className="font-bold text-emerald-800">Rs {form.retail_price.toLocaleString()}</span>
+              </div>
             </Field>
           </div>
-          <p className="mt-1 text-[11px] text-slate-400">Used to convert carton purchases into piece-level stock: 1 carton = {form.carton_to_box || 1} pieces.</p>
+          <p className="mt-2 text-[11px] text-slate-500">
+            * <strong>Purchase Price</strong> is saved at piece level (Rs {form.purchase_price.toLocaleString()}/pc). POS sales and inventory FIFO allocation use piece rates.
+          </p>
         </div>
 
         {/* Inventory */}

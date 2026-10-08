@@ -227,6 +227,14 @@ function prepareInsert(tableKey, body, { keepId = false } = {}) {
     }
   }
 
+  // Defensive stripping of transient UI carton rate fields for products
+  if (tableKey === 'products' || cfg?.table === 'products') {
+    delete data.carton_purchase_price;
+    delete data.carton_dealer_price;
+    delete data.carton_wholesale_price;
+    delete data.carton_retail_price;
+  }
+
   data = moneyIn(data, cfg.money);
   for (const b of cfg.bools) {
     if (b in data) data[b] = data[b] ? 1 : 0;

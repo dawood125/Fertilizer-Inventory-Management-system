@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Sprout, Eye, EyeOff, Lock, Mail, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { ApiError } from '@/lib/api';
+import flowLogo from '@/assets/Flow-transparent.png';
 
 export function LoginPage() {
   const { login } = useAuth();
@@ -26,33 +27,37 @@ export function LoginPage() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 px-4">
-      {/* Atmosphere */}
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#0e0709] px-4">
+      {/* Dynamic Brand Atmosphere (#ea174e) */}
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -left-24 -top-24 h-96 w-96 rounded-full bg-amber-500/20 blur-3xl" />
-        <div className="absolute -bottom-32 -right-16 h-[28rem] w-[28rem] rounded-full bg-orange-600/20 blur-3xl" />
+        <div className="absolute -left-28 -top-28 h-[30rem] w-[30rem] rounded-full bg-[#ea174e]/25 blur-[120px]" />
+        <div className="absolute -bottom-36 -right-20 h-[32rem] w-[32rem] rounded-full bg-[#c20e3d]/20 blur-[130px]" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-80 w-80 rounded-full bg-[#ea174e]/10 blur-[100px]" />
         <div
-          className="absolute inset-0 opacity-[0.07]"
+          className="absolute inset-0 opacity-[0.06]"
           style={{
             backgroundImage:
-              'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.45) 1px, transparent 0)',
+              'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.55) 1px, transparent 0)',
             backgroundSize: '24px 24px',
           }}
         />
       </div>
 
       <div className="relative z-10 w-full max-w-md animate-fadeIn">
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 text-white shadow-xl shadow-emerald-700/40">
-            <Sprout size={32} />
+        <div className="mb-6 text-center">
+          <div className="mx-auto mb-4 flex items-center justify-center">
+            <img
+              src={flowLogo}
+              alt="Company Logo"
+              className="h-16 w-auto max-w-[330px] object-contain drop-shadow-[0_4px_24px_rgba(234,23,78,0.6)] transition duration-300 hover:scale-105"
+            />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Fertilizer Manager</h1>
-          <p className="mt-1.5 text-sm text-slate-400">Wholesale Fertilizer & Agri-Inputs Distribution System</p>
+          <h1 className="text-2xl font-bold tracking-tight text-white">Ibrahim Business Manager</h1>
         </div>
 
         <form
           onSubmit={handleSubmit}
-          className="rounded-2xl border border-white/10 bg-white/95 p-7 shadow-2xl backdrop-blur-xl"
+          className="rounded-2xl border border-white/15 bg-white/95 p-7 shadow-2xl backdrop-blur-xl"
         >
           <h2 className="text-lg font-semibold text-slate-800">Sign in to continue</h2>
           <p className="mt-1 text-sm text-slate-500">Use your staff account credentials</p>
@@ -76,7 +81,7 @@ export function LoginPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-sm text-slate-800 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
+                  className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-sm text-slate-800 outline-none transition focus:border-[#ea174e] focus:ring-2 focus:ring-[#ea174e]/20"
                   placeholder="admin@store.com"
                 />
               </div>
@@ -94,7 +99,7 @@ export function LoginPage() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-10 text-sm text-slate-800 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
+                  className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-10 text-sm text-slate-800 outline-none transition focus:border-[#ea174e] focus:ring-2 focus:ring-[#ea174e]/20"
                   placeholder="••••••••"
                 />
                 <button
@@ -112,7 +117,7 @@ export function LoginPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-orange-600/30 transition hover:from-amber-600 hover:to-orange-700 disabled:opacity-60"
+            className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#ea174e] to-[#c20e3d] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-[#ea174e]/30 transition hover:from-[#d61445] hover:to-[#a90c34] active:scale-[0.99] disabled:opacity-60 cursor-pointer"
           >
             {submitting ? (
               <>
@@ -122,13 +127,7 @@ export function LoginPage() {
               'Sign In'
             )}
           </button>
-
-          <p className="mt-4 text-center text-xs text-slate-400">
-            Change this password after first login.
-          </p>
         </form>
-
-        <p className="mt-6 text-center text-xs text-slate-500">Works fully offline · Local SQLite database</p>
       </div>
     </div>
   );
