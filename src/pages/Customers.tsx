@@ -166,6 +166,91 @@ export function Customers() {
 
       if (editing) {
         await api.put(`/api/data/customers/${editing.id}`, payload);
+
+        // Synchronize initial opening balance invoice (OB) record
+        const allOrders = await api.get<any[]>('/api/data/orders').catch(() => []);
+        const obOrder = (allOrders || []).find(
+          (o) =>
+            o.customer_id === editing.id &&
+            ((o.order_number && String(o.order_number).startsWith('OB-')) ||
+             (o.note && (o.note.includes('Opening Balance') || o.note.includes('Previous Pending Due'))))
+        );
+
+        if (obOrder) {
+          if (openingDue > 0) {
+            const currentPaid = Number(obOrder.paid_amount || 0);
+            const newPaymentStatus = currentPaid >= openingDue ? 'paid' : (currentPaid > 0 ? 'partial' : 'unpaid');
+            await api.put(`/api/data/orders/${obOrder.id}`, {
+              subtotal: openingDue,
+              total: openingDue,
+              payment_status: newPaymentStatus,
+            });
+            const allItems = await api.get<any[]>('/api/data/order_items').catch(() => []);
+            const obItem = (allItems || []).find((it) => it.order_id === obOrder.id);
+            if (obItem) {
+              await api.put(`/api/data/order_items/${obItem.id}`, {
+                unit_price: openingDue,
+                total: openingDue,
+              });
+            } else {
+              await api.post('/api/data/order_items', {
+                order_id: obOrder.id,
+                product_id: null,
+                product_name: 'Opening Balance / Previous Pending Due',
+                quantity: 1,
+                unit_price: openingDue,
+                discount: 0,
+                tax: 0,
+                total: openingDue,
+                free_items: 0,
+                unit: 'balance',
+                cost_price: 0,
+                total_cost: 0,
+              });
+            }
+          } else {
+            // Opening balance set to 0: if unpaid, safely delete OB order
+            if (Number(obOrder.paid_amount || 0) === 0) {
+              await api.delete(`/api/data/orders/${obOrder.id}`).catch(() => {});
+            }
+          }
+        } else if (openingDue > 0) {
+          // No OB order existed previously, generate initial invoice and pending receivable now
+          const orderNum = generateDocNumber('OB');
+          const invNum = generateDocNumber('INV');
+          const order = await api.post<any>('/api/data/orders', {
+            order_number: orderNum,
+            invoice_number: invNum,
+            customer_id: editing.id,
+            customer_name: clean.name || editing.name,
+            customer_phone: clean.phone || editing.phone || null,
+            customer_area: clean.area || editing.area || null,
+            subtotal: openingDue,
+            discount: 0,
+            tax: 0,
+            total: openingDue,
+            paid_amount: 0,
+            status: 'completed',
+            payment_status: 'unpaid',
+            note: 'Initial Opening Balance / Previous Pending Due',
+            sales_rep_id: clean.sales_rep_id || null,
+            route_id: clean.route_id || null,
+          });
+          await api.post('/api/data/order_items', {
+            order_id: order.id,
+            product_id: null,
+            product_name: 'Opening Balance / Previous Pending Due',
+            quantity: 1,
+            unit_price: openingDue,
+            discount: 0,
+            tax: 0,
+            total: openingDue,
+            free_items: 0,
+            unit: 'balance',
+            cost_price: 0,
+            total_cost: 0,
+          });
+        }
         notify('Customer updated', 'success');
       } else {
         const createdCustomer = await api.post<any>('/api/data/customers', payload);

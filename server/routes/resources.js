@@ -219,12 +219,13 @@ function prepareInsert(tableKey, body, { keepId = false } = {}) {
   delete data.created_at;
   delete data.updated_at;
 
-  // Defensive mapping for purchase_items (Bug #26: unit_price vs unit_cost)
+  // Defensive mapping for purchase_items (Bug #26: unit_price vs unit_cost, and stripping unknown columns like unit)
   if (tableKey === 'purchase_items' || cfg?.table === 'purchase_items') {
     if (data.unit_price !== undefined && data.unit_cost === undefined) {
       data.unit_cost = data.unit_price;
       delete data.unit_price;
     }
+    delete data.unit;
   }
 
   // Defensive stripping of transient UI carton rate fields for products

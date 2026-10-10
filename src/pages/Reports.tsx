@@ -252,6 +252,14 @@ export function Reports() {
         )
       );
 
+    const isOpeningBalancePO = (p: any) =>
+      Boolean(
+        p && (
+          (p.po_number && String(p.po_number).startsWith('PO-OB')) ||
+          (p.note && (p.note.includes('Opening Balance') || p.note.includes('Previous Supplier Due')))
+        )
+      );
+
     // Filter valid (non-cancelled) orders within period
     const allOrders = ordersRaw || [];
     const validPeriodOrders = allOrders
@@ -297,7 +305,7 @@ export function Reports() {
     });
 
     const purchasesList = (purchasesRaw || [])
-      .filter((p: any) => isWithinDateRange(p.created_at, dateFilter))
+      .filter((p: any) => !isOpeningBalancePO(p) && isWithinDateRange(p.created_at, dateFilter))
       .map((p: any) => ({
         ...p,
         suppliers: p.supplier_id ? { name: supplierMap.get(p.supplier_id)?.name } : null,

@@ -1929,7 +1929,9 @@ export function Suppliers() {
         const sPOs = (pos || []).filter((p) => p.supplier_id === s.id);
         const sReturns = (returns || []).filter((r) => r.supplier_id === s.id && (r.resolution === 'credit' || !r.resolution));
         if (sPOs.length > 0 || sReturns.length > 0) {
-          const totalDue = sPOs.reduce((acc, p) => acc + Math.max(0, Number(p.total || 0) - Number(p.paid_amount || 0)), 0);
+          const hasObPO = sPOs.some((p) => (p.po_number || '').startsWith('PO-OB') || (p.note || '').includes('Opening Balance') || (p.note || '').includes('Previous Supplier Due'));
+          const obFallback = (!hasObPO && Number(s.opening_balance || 0) > 0) ? Number(s.opening_balance || 0) : 0;
+          const totalDue = sPOs.reduce((acc, p) => acc + Math.max(0, Number(p.total || 0) - Number(p.paid_amount || 0)), 0) + obFallback;
           const creditReturns = sReturns.reduce((acc, r) => acc + Number(r.total_amount || 0), 0);
           const trueBal = totalDue - creditReturns;
           if (Math.abs(Number(s.balance || 0) - trueBal) > 0.01) {
@@ -1979,12 +1981,24 @@ export function Suppliers() {
 
       const supPOs = (pos || []).filter((p) => p.supplier_id === s.id);
       const supApprovedReturns = (returns || []).filter((r) => r.supplier_id === s.id && (r.resolution === 'credit' || !r.resolution));
-      const totalDue = supPOs.reduce((acc, p) => acc + Math.max(0, Number(p.total || 0) - Number(p.paid_amount || 0)), 0);
+      const hasObPO = supPOs.some((p) => (p.po_number || '').startsWith('PO-OB') || (p.note || '').includes('Opening Balance') || (p.note || '').includes('Previous Supplier Due'));
+      const obFallback = (!hasObPO && Number(s.opening_balance || 0) > 0) ? Number(s.opening_balance || 0) : 0;
+      const totalDue = supPOs.reduce((acc, p) => acc + Math.max(0, Number(p.total || 0) - Number(p.paid_amount || 0)), 0) + obFallback;
       const creditReturns = supApprovedReturns.reduce((acc, r) => acc + Number(r.total_amount || 0), 0);
-      const reconciledBalance = (supPOs.length > 0 || supApprovedReturns.length > 0) ? (totalDue - creditReturns) : Number(s.balance || 0);
+      const reconciledBalance = (supPOs.length > 0 || supApprovedReturns.length > 0 || obFallback > 0) ? (totalDue - creditReturns) : Number(s.balance || 0);
 
       // Combined chronological ledger stream
       const allEvents: any[] = [
+        ...(!hasObPO && Number(s.opening_balance || 0) > 0 ? [{
+          id: `ob-${s.id}`,
+          date: s.created_at,
+          type: 'purchase_order',
+          ref: 'OPENING-BAL',
+          amount: Number(s.opening_balance || 0),
+          status: 'received',
+          payment_status: 'unpaid',
+          note: 'Initial Opening Balance / Previous Supplier Due',
+        }] : []),
         ...supPurchases.map((p) => ({
           id: `po-${p.id}`,
           date: p.created_at,
@@ -2045,6 +2059,70 @@ export function Suppliers() {
         payload.opening_balance = openingDue;
         payload.balance = Number(editing.balance || 0) + delta;
         await api.put(`/api/data/suppliers/${editing.id}`, payload);
+
+        // Synchronize PO-OB record
+        const allPOs = await api.get<any[]>('/api/data/purchase_orders').catch(() => []);
+        const obPO = (allPOs || []).find(
+          (p) =>
+            p.supplier_id === editing.id &&
+            ((p.po_number && String(p.po_number).startsWith('PO-OB')) ||
+             (p.note && (p.note.includes('Opening Balance') || p.note.includes('Previous Supplier Due'))))
+        );
+
+        if (obPO) {
+          if (openingDue > 0) {
+            const currentPaid = Number(obPO.paid_amount || 0);
+            const newPaymentStatus = currentPaid >= openingDue ? 'paid' : (currentPaid > 0 ? 'partial' : 'unpaid');
+            await api.put(`/api/data/purchase_orders/${obPO.id}`, {
+              subtotal: openingDue,
+              total: openingDue,
+              payment_status: newPaymentStatus,
+            });
+            const allItems = await api.get<any[]>('/api/data/purchase_items').catch(() => []);
+            const obItem = (allItems || []).find((it) => it.purchase_id === obPO.id);
+            if (obItem) {
+              await api.put(`/api/data/purchase_items/${obItem.id}`, {
+                unit_cost: openingDue,
+                total: openingDue,
+              });
+            } else {
+              await api.post('/api/data/purchase_items', {
+                purchase_id: obPO.id,
+                product_id: null,
+                product_name: 'Opening Balance / Previous Supplier Due',
+                quantity: 1,
+                unit_cost: openingDue,
+                total: openingDue,
+              });
+            }
+          } else {
+            // Opening balance set to 0: if unpaid, safely delete PO-OB
+            if (Number(obPO.paid_amount || 0) === 0) {
+              await api.delete(`/api/data/purchase_orders/${obPO.id}`).catch(() => {});
+            }
+          }
+        } else if (openingDue > 0) {
+          // No PO-OB existed previously, generate initial PO record now
+          const poNumber = generateDocNumber('PO-OB');
+          const po = await api.post<any>('/api/data/purchase_orders', {
+            po_number: poNumber,
+            supplier_id: editing.id,
+            subtotal: openingDue,
+            total: openingDue,
+            paid_amount: 0,
+            status: 'received',
+            payment_status: 'unpaid',
+            note: 'Initial Opening Balance / Previous Supplier Due',
+          });
+          await api.post('/api/data/purchase_items', {
+            purchase_id: po.id,
+            product_id: null,
+            product_name: 'Opening Balance / Previous Supplier Due',
+            quantity: 1,
+            unit_cost: openingDue,
+            total: openingDue,
+          });
+        }
         notify('Supplier updated', 'success');
       } else {
         payload.opening_balance = openingDue;
@@ -2071,7 +2149,6 @@ export function Suppliers() {
             quantity: 1,
             unit_cost: openingDue,
             total: openingDue,
-            unit: 'balance',
           });
         }
         notify('Supplier added', 'success');
