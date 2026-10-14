@@ -28,6 +28,14 @@ export function Dashboard({ navigate }: { navigate: (path: string) => void }) {
   const { symbol } = useSettings();
   const [expiryTab, setExpiryTab] = useState<'all' | 'expired' | 'soon'>('all');
 
+  const filteredExpiryAlerts = useMemo(() => {
+    return (expiryAlerts || []).filter((item) => {
+      if (expiryTab === 'expired') return item.isExpired;
+      if (expiryTab === 'soon') return !item.isExpired;
+      return true;
+    });
+  }, [expiryAlerts, expiryTab]);
+
   if (loading || !stats) {
     return (
       <div>
@@ -42,14 +50,6 @@ export function Dashboard({ navigate }: { navigate: (path: string) => void }) {
     label: new Date(d.date).toLocaleDateString('en', { weekday: 'short' }),
     value: d.sales,
   }));
-
-  const filteredExpiryAlerts = useMemo(() => {
-    return expiryAlerts.filter((item) => {
-      if (expiryTab === 'expired') return item.isExpired;
-      if (expiryTab === 'soon') return !item.isExpired;
-      return true;
-    });
-  }, [expiryAlerts, expiryTab]);
 
   const quickActions = [
     { label: 'Create Purchase', path: '/purchases', icon: <Truck size={18} />, color: 'bg-sky-600 hover:bg-sky-700' },
