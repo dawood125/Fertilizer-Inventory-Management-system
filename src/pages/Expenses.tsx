@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { api } from '@/lib/api';
 import type { Expense, ExpenseCategory } from '@/lib/types';
 import { useSettings } from '@/context/SettingsContext';
+import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/Toast';
 import { Button } from '@/components/Button';
 import { Field, Input, Select, Textarea } from '@/components/Form';
@@ -29,6 +30,7 @@ import { DateTimeFilter, type DateFilterValue, isWithinDateRange } from '@/compo
 
 export function Expenses() {
   const { symbol, settings, logoSrc } = useSettings();
+  const { isAdmin } = useAuth();
   const { notify } = useToast();
   const [expenses, setExpenses] = useState<any[]>([]);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
@@ -163,6 +165,10 @@ export function Expenses() {
   };
 
   const remove = async (e: Expense) => {
+    if (!isAdmin) {
+      notify('Only administrators can delete expense records', 'error');
+      return;
+    }
     try {
       if (e.payment_method && e.payment_method !== 'credit' && Number(e.amount) > 0) {
         // Restore money back to the account
@@ -408,13 +414,15 @@ export function Expenses() {
                         >
                           <Pencil size={16} />
                         </button>
-                        <button
-                          onClick={() => setDeleteTarget(e)}
-                          title="Delete Expense & Restore Cash"
-                          className="rounded-lg p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600 transition"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                        {isAdmin && (
+                          <button
+                            onClick={() => setDeleteTarget(e)}
+                            title="Delete Expense & Restore Cash"
+                            className="rounded-lg p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600 transition"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

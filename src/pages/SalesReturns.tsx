@@ -259,18 +259,8 @@ export function SalesReturns() {
         const debtWiped = Math.min(grandTotal, unpaidDebt);
         const excessCredit = Math.max(0, grandTotal - unpaidDebt);
 
-        const netKeptTotal = Math.max(0, oldTotal - grandTotal);
-        const netAllocatedPaid = Math.min(oldPaid, netKeptTotal);
-        const newPaymentStatus = (netKeptTotal <= netAllocatedPaid) ? 'paid' : (netAllocatedPaid > 0 ? 'partial' : 'unpaid');
-
-        // Update order cleanly: total and paid_amount never produce negative due!
-        if (order) {
-          await api.put(`/api/data/orders/${order.id}`, {
-            total: netKeptTotal,
-            paid_amount: netAllocatedPaid,
-            payment_status: newPaymentStatus,
-          });
-        }
+        // NOTE: The original sale order bill is kept intact and immutable.
+        // The return is tracked via the Sales Return voucher, restocked inventory, and customer ledger / cash refund.
 
         if (data.resolution === 'refund') {
           // Cash Refund: Physical cash handed to customer from Cash Drawer
@@ -421,23 +411,6 @@ export function SalesReturns() {
           if (cust) {
             await api.put(`/api/data/customers/${returnItem.customer_id}`, {
               balance: Number(cust.balance || 0) - total,
-            });
-          }
-        }
-
-        // Also adjust order total cleanly so due is never negative
-        if (returnItem.order_id && total > 0) {
-          const ord = await api.get<any>(`/api/data/orders/${returnItem.order_id}`);
-          if (ord) {
-            const oldTotal = Number(ord.total || 0);
-            const oldPaid = Number(ord.paid_amount || 0);
-            const netKeptTotal = Math.max(0, oldTotal - total);
-            const netAllocatedPaid = Math.min(oldPaid, netKeptTotal);
-            const newPaymentStatus = (netKeptTotal <= netAllocatedPaid) ? 'paid' : (netAllocatedPaid > 0 ? 'partial' : 'unpaid');
-            await api.put(`/api/data/orders/${ord.id}`, {
-              total: netKeptTotal,
-              paid_amount: netAllocatedPaid,
-              payment_status: newPaymentStatus,
             });
           }
         }

@@ -9,7 +9,8 @@ import { Field, Input, Select, Textarea } from '@/components/Form';
 import { Card, Badge, Spinner, PageHeader, EmptyState } from '@/components/ui';
 import { Modal, ConfirmModal } from '@/components/Modal';
 import { Pagination } from '@/components/Pagination';
-import { formatCurrency, cn } from '@/lib/utils';
+import { formatCurrency, cn, getProductExpiryStatus } from '@/lib/utils';
+import { getQueryParam } from '@/lib/router';
 import { cartonRateFromPiece, piecesPerCarton } from '@/lib/units';
 import { receiveStockBatch } from '@/lib/fifo';
 import {
@@ -30,6 +31,8 @@ import {
   CheckCircle2,
   X,
   Info,
+  Calendar,
+  Clock,
 } from 'lucide-react';
 import { parseCsv, generateCsv, downloadCsv, PRODUCT_CSV_HEADERS, PRODUCT_CSV_SAMPLE_ROWS } from '@/lib/csv';
 
@@ -42,7 +45,9 @@ function generateSKU(prefix: string = 'PRD'): string {
 
 export function Products() {
   const { symbol } = useSettings();
+  const { isAdmin, hasPermission } = useAuth();
   const { notify } = useToast();
+  const canManageInventory = isAdmin || hasPermission('inventory');
 
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState<Product[]>([]);
@@ -88,6 +93,14 @@ export function Products() {
     loadData();
   }, [loadData]);
 
+  // Sync filter from URL query param (e.g. ?stockFilter=expired or ?stockFilter=near_expiry)
+  useEffect(() => {
+    const urlFilter = getQueryParam('stockFilter') || getQueryParam('filter');
+    if (urlFilter && ['all', 'ok', 'low', 'out', 'expired', 'near_expiry'].includes(urlFilter)) {
+      setStockFilter(urlFilter);
+    }
+  }, []);
+
   useEffect(() => {
     setCurrentPage(1);
   }, [search, stockFilter]);
@@ -100,11 +113,14 @@ export function Products() {
     const q = search.toLowerCase().trim();
     return products.filter((p) => {
       const matchSearch = !q || p.name.toLowerCase().includes(q) || p.sku?.toLowerCase().includes(q);
+      const expInfo = getProductExpiryStatus(p.expiry_date);
       const matchStock =
         stockFilter === 'all' ||
         (stockFilter === 'low' && p.stock_quantity > 0 && p.stock_quantity <= p.min_stock_level) ||
         (stockFilter === 'out' && p.stock_quantity <= 0) ||
-        (stockFilter === 'ok' && p.stock_quantity > p.min_stock_level);
+        (stockFilter === 'ok' && p.stock_quantity > p.min_stock_level) ||
+        (stockFilter === 'expired' && expInfo.status === 'expired') ||
+        (stockFilter === 'near_expiry' && expInfo.status === 'near_expiry');
 
       return matchSearch && matchStock;
     });
@@ -135,7 +151,10 @@ export function Products() {
               created.id,
               'INITIAL-STOCK',
               Number(payload.stock_quantity),
-              Number(payload.purchase_price || 0)
+              Number(payload.purchase_price || 0),
+              null,
+              undefined,
+              payload.expiry_date || undefined
             );
           } catch {
             // Non-critical batch creation error
@@ -179,24 +198,26 @@ export function Products() {
         title="Products"
         subtitle={`${products.length} products in catalog`}
         actions={
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              icon={<Upload size={16} />}
-              onClick={() => setShowImportModal(true)}
-            >
-              Import CSV
-            </Button>
-            <Button
-              icon={<Plus size={18} />}
-              onClick={() => {
-                setEditing(null);
-                setShowForm(true);
-              }}
-            >
-              Add Product
-            </Button>
-          </div>
+          canManageInventory ? (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                icon={<Upload size={16} />}
+                onClick={() => setShowImportModal(true)}
+              >
+                Import CSV
+              </Button>
+              <Button
+                icon={<Plus size={18} />}
+                onClick={() => {
+                  setEditing(null);
+                  setShowForm(true);
+                }}
+              >
+                Add Product
+              </Button>
+            </div>
+          ) : undefined
         }
       />
 
@@ -221,6 +242,8 @@ export function Products() {
           <option value="ok">In Stock</option>
           <option value="low">Low Stock</option>
           <option value="out">Out of Stock</option>
+          <option value="near_expiry">Expiring Soon (30 Days)</option>
+          <option value="expired">Expired Products</option>
         </select>
       </div>
 
@@ -255,6 +278,7 @@ export function Products() {
                 category={categoryMap.get(product.category_id ?? '')}
                 brand={brandMap.get(product.brand_id ?? '')}
                 company={companyMap.get(product.company_id ?? '')}
+                canEdit={canManageInventory}
                 onEdit={(p) => {
                   setEditing(p);
                   setShowForm(true);
@@ -333,14 +357,16 @@ interface ProductCardProps {
   category?: Category;
   brand?: Brand;
   company?: Company;
+  canEdit?: boolean;
   onEdit: (product: Product) => void;
   onDelete: (product: Product) => void;
 }
 
-function ProductCard({ product, currencySymbol, category, brand, company, onEdit, onDelete }: ProductCardProps) {
+function ProductCard({ product, currencySymbol, category, brand, company, canEdit = true, onEdit, onDelete }: ProductCardProps) {
   const isOut = product.stock_quantity <= 0;
   const isLow = product.stock_quantity > 0 && product.stock_quantity <= product.min_stock_level;
   const hasConversions = product.carton_to_box > 0 || product.box_to_pack > 0 || product.pack_to_piece > 0;
+  const expInfo = getProductExpiryStatus(product.expiry_date);
 
   return (
     <Card className="flex flex-col justify-between overflow-hidden transition-all hover:shadow-md">
@@ -361,22 +387,24 @@ function ProductCard({ product, currencySymbol, category, brand, company, onEdit
               <h3 className="truncate text-base font-semibold text-slate-800" title={product.name}>
                 {product.name}
               </h3>
-              <div className="flex shrink-0 gap-1">
-                <button
-                  onClick={() => onEdit(product)}
-                  className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                  aria-label="Edit product"
-                >
-                  <Pencil size={15} />
-                </button>
-                <button
-                  onClick={() => onDelete(product)}
-                  className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-                  aria-label="Delete product"
-                >
-                  <Trash2 size={15} />
-                </button>
-              </div>
+              {canEdit && (
+                <div className="flex shrink-0 gap-1">
+                  <button
+                    onClick={() => onEdit(product)}
+                    className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                    aria-label="Edit product"
+                  >
+                    <Pencil size={15} />
+                  </button>
+                  <button
+                    onClick={() => onDelete(product)}
+                    className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                    aria-label="Delete product"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Badges */}
@@ -396,6 +424,16 @@ function ProductCard({ product, currencySymbol, category, brand, company, onEdit
                 <Badge variant="blue">
                   <Layers size={10} className="mr-1 inline" />
                   {category.name}
+                </Badge>
+              )}
+              {expInfo.status === 'expired' && (
+                <Badge variant="red" className="bg-rose-100 text-rose-800 font-semibold border border-rose-300">
+                  <AlertTriangle size={11} className="mr-1 inline text-rose-600" /> Expired
+                </Badge>
+              )}
+              {expInfo.status === 'near_expiry' && (
+                <Badge variant="amber" className="bg-amber-100 text-amber-800 font-semibold border border-amber-300">
+                  <Clock size={11} className="mr-1 inline text-amber-600" /> Expiring Soon
                 </Badge>
               )}
             </div>
@@ -446,6 +484,37 @@ function ProductCard({ product, currencySymbol, category, brand, company, onEdit
             </span>
           </div>
         </div>
+
+        {/* Expiry Bar (if specified) */}
+        {product.expiry_date && (
+          <div
+            className={cn(
+              'flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs border',
+              expInfo.status === 'expired'
+                ? 'border-rose-200 bg-rose-50/90 text-rose-700 font-medium'
+                : expInfo.status === 'near_expiry'
+                ? 'border-amber-200 bg-amber-50/90 text-amber-800 font-medium'
+                : 'border-slate-200 bg-slate-50 text-slate-600'
+            )}
+          >
+            <span className="flex items-center gap-1.5">
+              <Calendar
+                size={13}
+                className={
+                  expInfo.status === 'expired'
+                    ? 'text-rose-500'
+                    : expInfo.status === 'near_expiry'
+                    ? 'text-amber-500'
+                    : 'text-slate-400'
+                }
+              />
+              <span>Expiry Date:</span>
+            </span>
+            <span className="font-semibold">
+              {product.expiry_date} <span className="text-[11px] font-normal">({expInfo.label})</span>
+            </span>
+          </div>
+        )}
 
         {/* Pricing Matrix */}
         <div className="space-y-1.5 border-t border-slate-100 pt-2">
@@ -545,6 +614,7 @@ const initialFormState = {
   carton_to_box: 1,
   box_to_pack: 0,
   pack_to_piece: 0,
+  expiry_date: '',
   description: '',
 };
 
@@ -604,8 +674,10 @@ function ProductForm({ open, onClose, onSave, editing, categories, brands, compa
         carton_to_box: ctnPacking,
         box_to_pack: editing.box_to_pack || 0,
         pack_to_piece: editing.pack_to_piece || 0,
+        expiry_date: editing.expiry_date || '',
         description: editing.description || '',
       });
+
     } else if (open) {
       setForm({
         ...initialFormState,
@@ -697,6 +769,7 @@ function ProductForm({ open, onClose, onSave, editing, categories, brands, compa
 
     const payload = {
       ...cleanForm,
+      expiry_date: form.expiry_date ? form.expiry_date : null,
       purchase_price: purchasePiece,
       cost_price: purchasePiece,
       dealer_price: dealerPiece,
@@ -977,10 +1050,10 @@ function ProductForm({ open, onClose, onSave, editing, categories, brands, compa
           </p>
         </div>
 
-        {/* Inventory */}
+        {/* Inventory & Expiry */}
         <div>
-          <p className="mb-2 text-sm font-semibold text-slate-700">Inventory</p>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <p className="mb-2 text-sm font-semibold text-slate-700">Inventory & Expiry</p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Field label="Stock (pieces)">
               <Input
                 type="number"
@@ -993,6 +1066,13 @@ function ProductForm({ open, onClose, onSave, editing, categories, brands, compa
                 type="number"
                 value={form.min_stock_level || ''}
                 onChange={(e) => updateField('min_stock_level', Number(e.target.value))}
+              />
+            </Field>
+            <Field label="Expiry Date">
+              <Input
+                type="date"
+                value={form.expiry_date || ''}
+                onChange={(e) => updateField('expiry_date', e.target.value)}
               />
             </Field>
             <Field label="Status">
@@ -1029,6 +1109,8 @@ interface ParsedProductRow {
   sku: string;
   barcode: string;
   description: string;
+  batchNumber?: string;
+  expiryDate?: string;
   isValid: boolean;
   error?: string;
 }
@@ -1110,6 +1192,8 @@ function ImportProductsModal({
       const skuIdx = findIdx('sku', 'code', 'item code');
       const barIdx = findIdx('barcode', 'upc', 'ean');
       const descIdx = findIdx('description', 'desc', 'details', 'notes');
+      const batchIdx = findIdx('batch number', 'batch id', 'batch no', 'batch', 'lot', 'lot number');
+      const expIdx = findIdx('expiry date', 'expiry', 'exp date', 'exp');
 
       const dataRows = rawRows.slice(1);
       const seenNamesInCsv = new Set<string>();
@@ -1138,6 +1222,8 @@ function ImportProductsModal({
         }
         const barcode = (barIdx >= 0 ? cols[barIdx] : '')?.trim() || '';
         const description = (descIdx >= 0 ? cols[descIdx] : '')?.trim() || '';
+        const batchNumber = (batchIdx >= 0 ? cols[batchIdx] : '')?.trim() || '';
+        const expiryDate = (expIdx >= 0 ? cols[expIdx] : '')?.trim() || '';
 
         const lowerName = name.toLowerCase().trim();
         let isValid = Boolean(name);
@@ -1172,6 +1258,8 @@ function ImportProductsModal({
           sku,
           barcode,
           description,
+          batchNumber: batchNumber || undefined,
+          expiryDate: expiryDate || undefined,
           isValid,
           error,
         };
@@ -1181,6 +1269,7 @@ function ImportProductsModal({
     };
     reader.readAsText(file, 'utf-8');
   };
+
 
   const handleImport = async () => {
     const validRows = parsedRows.filter((r) => r.isValid);
@@ -1294,6 +1383,7 @@ function ImportProductsModal({
             carton_to_box: item.cartonToBox || 0,
             box_to_pack: 0,
             pack_to_piece: 0,
+            expiry_date: item.expiryDate || null,
             description: item.description || null,
             image_url: null,
           });
@@ -1307,13 +1397,16 @@ function ImportProductsModal({
                 quantity: item.stockQuantity,
                 reference_type: 'csv_import',
                 reference_id: newProd.id,
-                note: 'Initial stock imported from CSV',
+                note: `Initial stock imported from CSV${item.batchNumber ? ` (Batch: ${item.batchNumber})` : ''}`,
               });
               await receiveStockBatch(
                 newProd.id,
                 'CSV-IMPORT',
                 item.stockQuantity,
-                item.purchasePrice || item.costPrice || 0
+                item.purchasePrice || item.costPrice || 0,
+                null,
+                item.batchNumber || undefined,
+                item.expiryDate || undefined
               );
             } catch {
               // Non-critical, continue
@@ -1445,6 +1538,8 @@ function ImportProductsModal({
                     <th className="py-2.5 px-3 text-right">Wholesale</th>
                     <th className="py-2.5 px-3 text-center">Boxes/Ctn</th>
                     <th className="py-2.5 px-3 text-center">Initial Stock</th>
+                    <th className="py-2.5 px-3">Batch #</th>
+                    <th className="py-2.5 px-3">Expiry</th>
                     <th className="py-2.5 px-3">SKU</th>
                     <th className="py-2.5 px-3 text-center">Status</th>
                   </tr>
@@ -1496,6 +1591,8 @@ function ImportProductsModal({
                       <td className="py-2 px-3 text-center font-semibold text-slate-800">
                         {row.stockQuantity} {row.unit}
                       </td>
+                      <td className="py-2 px-3 font-mono text-[11px] text-slate-600">{row.batchNumber || '—'}</td>
+                      <td className="py-2 px-3 text-[11px] text-slate-600">{row.expiryDate || '—'}</td>
                       <td className="py-2 px-3 font-mono text-[11px] text-slate-500">{row.sku}</td>
                       <td className="py-2 px-3 text-center">
                         {row.isValid ? (

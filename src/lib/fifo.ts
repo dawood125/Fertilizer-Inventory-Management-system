@@ -104,7 +104,8 @@ export async function receiveStockBatch(
   quantity: number,
   unitCost: number,
   purchaseId?: string | null,
-  batchNumberCustom?: string
+  batchNumberCustom?: string,
+  expiryDate?: string | null
 ): Promise<ProductBatch | null> {
   const qty = Math.max(0, Number(quantity) || 0);
   const cost = Math.max(0, Number(unitCost) || 0);
@@ -122,6 +123,7 @@ export async function receiveStockBatch(
       quantity: qty,
       damaged_quantity: 0,
       batch_cost: cost,
+      expiry_date: expiryDate || null,
       status: 'active',
     });
 

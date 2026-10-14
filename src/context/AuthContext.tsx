@@ -41,13 +41,34 @@ export function roleCanAccess(userOrRole: AuthUser | string | undefined | null, 
     if (path === '/products' || path.startsWith('/products/') || path === '/stock' || path.startsWith('/stock/')) {
       return permissions.includes('inventory');
     }
+    if (path === '/companies' || path.startsWith('/companies/')) {
+      return role === 'manager' || permissions.includes('companies') || permissions.includes('inventory');
+    }
+    if (path === '/brands' || path.startsWith('/brands/')) {
+      return role === 'manager' || permissions.includes('brands') || permissions.includes('inventory');
+    }
+    if (path === '/categories' || path.startsWith('/categories/')) {
+      return role === 'manager' || permissions.includes('categories') || permissions.includes('inventory');
+    }
     if (path === '/purchases' || path.startsWith('/purchases/') || path === '/purchase-orders' || path.startsWith('/purchase-orders/')) {
       return permissions.includes('purchases');
+    }
+    if (path === '/purchase-returns' || path.startsWith('/purchase-returns/')) {
+      return role === 'manager' || permissions.includes('purchases');
+    }
+    if (path === '/sales-returns' || path.startsWith('/sales-returns/')) {
+      return role === 'manager' || permissions.includes('orders') || permissions.includes('pos');
     }
     if (path === '/customers' || path.startsWith('/customers/')) return permissions.includes('customers');
     if (path === '/suppliers' || path.startsWith('/suppliers/')) return permissions.includes('suppliers');
     if (path === '/expenses' || path.startsWith('/expenses/')) return permissions.includes('expenses');
     if (path === '/reports' || path.startsWith('/reports/')) return permissions.includes('reports');
+    if (path === '/finance' || path.startsWith('/finance/')) {
+      return role === 'manager' || permissions.includes('reports') || permissions.includes('settings');
+    }
+    if (path === '/audit-logs' || path.startsWith('/audit-logs/')) {
+      return role === 'manager' || role === 'admin' || permissions.includes('settings');
+    }
     if (path === '/pending-payments' || path.startsWith('/pending-payments/')) {
       return permissions.includes('pos') || permissions.includes('purchases');
     }

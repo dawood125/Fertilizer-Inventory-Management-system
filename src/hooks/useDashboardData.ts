@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { api } from '@/lib/api';
-import { todayISO, monthStartISO } from '@/lib/utils';
+import { todayISO, monthStartISO, getProductExpiryStatus } from '@/lib/utils';
+import type { ProductExpiryAlert } from '@/lib/types';
 
 export type DashboardTimeframe = 'last_30_days' | 'this_month' | 'last_month' | 'all';
 
@@ -33,6 +34,8 @@ export interface DashboardStats {
   totalProducts: number;
   lowStockCount: number;
   outOfStockCount: number;
+  expiredCount: number;
+  nearExpiryCount: number;
 }
 
 export interface SalesDataPoint {
@@ -102,6 +105,8 @@ const emptyStats: DashboardStats = {
   totalProducts: 0,
   lowStockCount: 0,
   outOfStockCount: 0,
+  expiredCount: 0,
+  nearExpiryCount: 0,
 };
 
 function toLocalYMD(d: Date): string {
@@ -118,6 +123,7 @@ export function useDashboardData() {
   const [categorySales, setCategorySales] = useState<CategorySales[]>([]);
   const [recentActivity, setRecentActivity] = useState<RecentActivity | null>(null);
   const [overdueCustomers, setOverdueCustomers] = useState<OverdueCustomer[]>([]);
+  const [expiryAlerts, setExpiryAlerts] = useState<ProductExpiryAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [timeframe, setTimeframe] = useState<DashboardTimeframe>('this_month');
 
@@ -136,6 +142,7 @@ export function useDashboardData() {
       purchaseOrders,
       transactions,
       categories,
+      brands,
     } = raw;
 
     const today = todayISO();
@@ -154,6 +161,7 @@ export function useDashboardData() {
 
     const productMap = new Map<string, any>(productsList.map((p: any) => [p.id, p]));
     const categoryMap = new Map<string, any>((categories || []).map((c: any) => [c.id, c]));
+    const brandMap = new Map<string, any>((brands || []).map((b: any) => [b.id, b]));
 
     const isOpeningBalanceOrder = (o: any) =>
       Boolean(
@@ -331,6 +339,46 @@ export function useDashboardData() {
     );
     const outOfStock = productsList.filter((p: any) => p.stock_quantity <= 0);
 
+    // Compute Product Expiry Alerts (Expired and Expiring within 30 days)
+    const expiryAlertList: ProductExpiryAlert[] = [];
+    let expiredCount = 0;
+    let nearExpiryCount = 0;
+
+    (productsList || []).forEach((p: any) => {
+      if (!p.expiry_date) return;
+      const expInfo = getProductExpiryStatus(p.expiry_date);
+      if (expInfo.status === 'expired') {
+        expiredCount++;
+        expiryAlertList.push({
+          productId: p.id,
+          productName: p.name,
+          sku: p.sku || '—',
+          categoryName: categoryMap.get(p.category_id)?.name || 'General',
+          brandName: brandMap.get(p.brand_id)?.name || '—',
+          stockQuantity: Number(p.stock_quantity || 0),
+          expiryDate: p.expiry_date,
+          daysRemaining: expInfo.daysRemaining ?? 0,
+          isExpired: true,
+        });
+      } else if (expInfo.status === 'near_expiry') {
+        nearExpiryCount++;
+        expiryAlertList.push({
+          productId: p.id,
+          productName: p.name,
+          sku: p.sku || '—',
+          categoryName: categoryMap.get(p.category_id)?.name || 'General',
+          brandName: brandMap.get(p.brand_id)?.name || '—',
+          stockQuantity: Number(p.stock_quantity || 0),
+          expiryDate: p.expiry_date,
+          daysRemaining: expInfo.daysRemaining ?? 0,
+          isExpired: false,
+        });
+      }
+    });
+
+    expiryAlertList.sort((a, b) => a.daysRemaining - b.daysRemaining);
+    setExpiryAlerts(expiryAlertList);
+
     setStats({
       todaySales,
       monthlySales,
@@ -360,6 +408,8 @@ export function useDashboardData() {
       totalProducts: productsList.length,
       lowStockCount: lowStock.length,
       outOfStockCount: outOfStock.length,
+      expiredCount,
+      nearExpiryCount,
     });
 
     // 7-day Sales Bar Chart
@@ -485,6 +535,7 @@ export function useDashboardData() {
         transactions,
         categories,
         salesReturns,
+        brands,
       ] = await Promise.all([
         api.get<any[]>('/api/data/orders'),
         api.get<any[]>('/api/data/order_items'),
@@ -496,6 +547,7 @@ export function useDashboardData() {
         api.get<any[]>('/api/data/transactions'),
         api.get<any[]>('/api/data/categories'),
         api.get<any[]>('/api/data/sales_returns'),
+        api.get<any[]>('/api/data/brands'),
       ]);
 
       const raw = {
@@ -509,6 +561,7 @@ export function useDashboardData() {
         purchaseOrders: purchaseOrders || [],
         transactions: transactions || [],
         categories: categories || [],
+        brands: brands || [],
       };
       rawDataRef.current = raw;
 
@@ -533,6 +586,7 @@ export function useDashboardData() {
         stockAlerts: [],
       });
       setOverdueCustomers([]);
+      setExpiryAlerts([]);
     } finally {
       setLoading(false);
     }
@@ -549,9 +603,11 @@ export function useDashboardData() {
     categorySales,
     recentActivity,
     overdueCustomers,
+    expiryAlerts,
     loading,
     refetch: fetchAll,
     timeframe,
     setTimeframe: changeTimeframe,
   };
 }
+

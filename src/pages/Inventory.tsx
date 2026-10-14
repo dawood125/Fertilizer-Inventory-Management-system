@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { api, resolveImageUrl } from '@/lib/api';
 import type { Category, Brand, Product, StockMovement } from '@/lib/types';
 import { useSettings } from '@/context/SettingsContext';
+import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/Toast';
 import { Button } from '@/components/Button';
 import { Field, Input, Select } from '@/components/Form';
@@ -377,7 +378,9 @@ export function Brands() {
 // ===== STOCK MANAGEMENT =====
 export function StockManagement() {
   const { symbol } = useSettings();
+  const { isAdmin, hasPermission } = useAuth();
   const { notify } = useToast();
+  const canManageStock = isAdmin || hasPermission('inventory');
   const [products, setProducts] = useState<Product[]>([]);
   const [movements, setMovements] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -422,6 +425,10 @@ export function StockManagement() {
   }, [search, tab]);
 
   const doAdjust = async () => {
+    if (!canManageStock) {
+      notify('You do not have permission to update inventory stock', 'error');
+      return;
+    }
     if (!adjustModal || adjustForm.quantity <= 0) return;
     try {
       const qty = adjustForm.type === 'in' ? adjustForm.quantity : -adjustForm.quantity;
@@ -492,7 +499,11 @@ export function StockManagement() {
                     <td>{p.min_stock_level} cartons</td>
                     <td>{p.stock_quantity <= 0 ? <Badge variant="red">Out</Badge> : p.stock_quantity <= p.min_stock_level ? <Badge variant="amber">Low</Badge> : <Badge variant="green">OK</Badge>}</td>
                     <td className="text-right">
-                      <Button size="sm" variant="outline" onClick={() => { setAdjustModal(p); setAdjustForm({ type: 'in', quantity: 0, note: '' }); }}>Adjust</Button>
+                      {canManageStock ? (
+                        <Button size="sm" variant="outline" onClick={() => { setAdjustModal(p); setAdjustForm({ type: 'in', quantity: 0, note: '' }); }}>Adjust</Button>
+                      ) : (
+                        <span className="text-xs text-slate-400 italic">View only</span>
+                      )}
                     </td>
                   </tr>
                 ))}

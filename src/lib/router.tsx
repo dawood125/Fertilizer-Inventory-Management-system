@@ -2,6 +2,17 @@ import { type ReactNode, useEffect, useState, useCallback } from 'react';
 
 const getRoutePath = () => (window.location.hash.slice(1) || '/').split('?')[0] || '/';
 
+export function getQueryParam(name: string): string | null {
+  const hash = window.location.hash;
+  const hashQueryIdx = hash.indexOf('?');
+  if (hashQueryIdx !== -1) {
+    const params = new URLSearchParams(hash.slice(hashQueryIdx));
+    const val = params.get(name);
+    if (val) return val;
+  }
+  return new URLSearchParams(window.location.search).get(name);
+}
+
 export function useHashRoute(): [string, (path: string) => void] {
   const [route, setRoute] = useState(getRoutePath);
 

@@ -91,6 +91,8 @@ export const PRODUCT_CSV_HEADERS = [
   'Pieces per Carton',
   'Stock Quantity',
   'Min Stock Level',
+  'Batch Number',
+  'Expiry Date',
   'Unit',
   'SKU',
   'Barcode',
@@ -98,10 +100,10 @@ export const PRODUCT_CSV_HEADERS = [
 ];
 
 export const PRODUCT_CSV_SAMPLE_ROWS: (string | number)[][] = [
-  ['MULTI CLEAN 360ML', 'Engro', 'Pesticides', 'Engro Fertilizers', 1000, 1000, 1400, 1300, 1220, 20, 160, 20, 'piece', 'MC-360', '896101001001', 'Multi Clean liquid fertilizer 360ml bottle'],
-  ['ZORAVAR 1000ML', 'FMC', 'Fertilizer', 'FMC Chemicals', 1800, 1800, 2500, 2350, 2200, 12, 120, 15, 'piece', 'ZOR-1000', '896101002002', 'Zoravar growth booster 1000ml'],
-  ['UREA SPECIAL 50KG', 'Fauji', 'Fertilizer', 'FFC', 3200, 3200, 3800, 3600, 3500, 1, 50, 10, 'piece', 'UREA-50', '896101003003', 'Urea granular 50kg bag'],
-  ['SUPER PHOSPHATE 25KG', 'Fatima', 'Fertilizer', 'Fatima Fertilizer', 2400, 2400, 3100, 2900, 2800, 1, 80, 15, 'piece', 'SP-25', '896101004004', 'Super Phosphate single granular 25kg'],
+  ['MULTI CLEAN 360ML', 'Engro', 'Pesticides', 'Engro Fertilizers', 1000, 1000, 1400, 1300, 1220, 20, 160, 20, 'BATCH-MC-2026', '2027-12-31', 'piece', 'MC-360', '896101001001', 'Multi Clean liquid fertilizer 360ml bottle'],
+  ['ZORAVAR 1000ML', 'FMC', 'Fertilizer', 'FMC Chemicals', 1800, 1800, 2500, 2350, 2200, 12, 120, 15, 'BATCH-ZR-2026', '2027-06-30', 'piece', 'ZOR-1000', '896101002002', 'Zoravar growth booster 1000ml'],
+  ['UREA SPECIAL 50KG', 'Fauji', 'Fertilizer', 'FFC', 3200, 3200, 3800, 3600, 3500, 1, 50, 10, 'BATCH-UR-2026', '2028-01-01', 'piece', 'UREA-50', '896101003003', 'Urea granular 50kg bag'],
+  ['SUPER PHOSPHATE 25KG', 'Fatima', 'Fertilizer', 'Fatima Fertilizer', 2400, 2400, 3100, 2900, 2800, 1, 80, 15, 'BATCH-SP-2026', '2026-12-31', 'piece', 'SP-25', '896101004004', 'Super Phosphate single granular 25kg'],
 ];
 
 // Sample CSV for Purchase Order Import

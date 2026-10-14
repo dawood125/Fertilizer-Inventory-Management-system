@@ -464,6 +464,12 @@ export function createResourceRouter() {
     const cfg = TABLES[key];
     if (!cfg) return res.status(404).json({ error: 'Unknown resource' });
     const table = cfg.table || key;
+
+    // Strict security rule: Only Admin role can delete expense records (Managers and Staff cannot)
+    if (key === 'expenses' && req.user?.role !== 'admin') {
+      return res.status(403).json({ error: 'Only administrators are allowed to delete expense records' });
+    }
+
     const existing = queryOne(`SELECT * FROM ${table} WHERE id = ?`, [req.params.id]);
 
     // Preserve historical customer info on orders before customer deletion (Bug #20)

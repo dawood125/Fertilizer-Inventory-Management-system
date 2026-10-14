@@ -221,7 +221,9 @@ function UserSettings() {
 const USER_PERMISSIONS_LIST = [
   { key: 'pos', label: 'POS Billing', desc: 'Create sales orders & print bills' },
   { key: 'orders', label: 'Sales History', desc: 'View completed sale orders & invoices' },
-  { key: 'inventory', label: 'View Inventory', desc: 'View products, stock levels, and warehouse' },
+  { key: 'inventory', label: 'Manage & Update Inventory', desc: 'Create and update products, adjust stock levels, and manage warehouse' },
+  { key: 'companies', label: 'Companies & Principals', desc: 'Create and manage manufacturing companies' },
+  { key: 'brands', label: 'Brands & Lines', desc: 'Create and manage brand names and logos' },
   { key: 'edit_prices', label: 'Edit Product Prices', desc: 'Modify cost, retail, wholesale & dealer rates' },
   { key: 'purchases', label: 'Create Purchases', desc: 'Create supplier purchase orders & bills' },
   { key: 'approve_purchases', label: 'Approve & Receive Purchases', desc: 'Verify and inject stock into inventory' },
@@ -232,6 +234,23 @@ const USER_PERMISSIONS_LIST = [
   { key: 'settings', label: 'System Settings', desc: 'Manage store configuration and users' },
 ];
 
+const DEFAULT_MANAGER_PERMISSIONS = [
+  'pos',
+  'orders',
+  'inventory',
+  'companies',
+  'brands',
+  'edit_prices',
+  'purchases',
+  'approve_purchases',
+  'customers',
+  'suppliers',
+  'expenses',
+  'reports',
+];
+
+const DEFAULT_STAFF_PERMISSIONS = ['pos', 'orders', 'customers', 'inventory', 'purchases'];
+
 function UserForm({ open, onClose, onSave, editing }: { open: boolean; onClose: () => void; onSave: (d: Partial<AppUser> & { password?: string }) => void; editing: AppUser | null }) {
   const [form, setForm] = useState({
     name: '',
@@ -240,7 +259,7 @@ function UserForm({ open, onClose, onSave, editing }: { open: boolean; onClose: 
     phone: '',
     active: true,
     password: '',
-    permissions: ['pos', 'orders', 'customers', 'inventory', 'purchases'] as string[],
+    permissions: DEFAULT_STAFF_PERMISSIONS as string[],
   });
 
   useEffect(() => {
@@ -256,7 +275,9 @@ function UserForm({ open, onClose, onSave, editing }: { open: boolean; onClose: 
           ? editing.permissions
           : editing.role === 'admin'
             ? USER_PERMISSIONS_LIST.map((p) => p.key)
-            : ['pos', 'orders', 'customers', 'inventory', 'purchases'],
+            : editing.role === 'manager'
+              ? DEFAULT_MANAGER_PERMISSIONS
+              : DEFAULT_STAFF_PERMISSIONS,
       });
     } else {
       setForm({
@@ -266,7 +287,7 @@ function UserForm({ open, onClose, onSave, editing }: { open: boolean; onClose: 
         phone: '',
         active: true,
         password: '',
-        permissions: ['pos', 'orders', 'customers', 'inventory', 'purchases'],
+        permissions: DEFAULT_STAFF_PERMISSIONS,
       });
     }
   }, [editing, open]);
@@ -319,8 +340,10 @@ function UserForm({ open, onClose, onSave, editing }: { open: boolean; onClose: 
                 let nextPerms = form.permissions;
                 if (nextRole === 'admin') {
                   nextPerms = USER_PERMISSIONS_LIST.map((p) => p.key);
-                } else if (nextRole === 'staff' && form.role === 'admin') {
-                  nextPerms = ['pos', 'orders', 'customers', 'inventory', 'purchases'];
+                } else if (nextRole === 'manager') {
+                  nextPerms = DEFAULT_MANAGER_PERMISSIONS;
+                } else if (nextRole === 'staff') {
+                  nextPerms = DEFAULT_STAFF_PERMISSIONS;
                 }
                 setForm({ ...form, role: nextRole, permissions: nextPerms });
               }}

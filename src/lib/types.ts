@@ -42,7 +42,20 @@ export interface Product {
   carton_to_box: number;
   box_to_pack: number;
   pack_to_piece: number;
+  expiry_date?: string | null;
   created_at: string;
+}
+
+export interface ProductExpiryAlert {
+  productId: string;
+  productName: string;
+  sku: string;
+  categoryName: string;
+  brandName: string;
+  stockQuantity: number;
+  expiryDate: string;
+  daysRemaining: number;
+  isExpired: boolean;
 }
 
 export interface Customer {

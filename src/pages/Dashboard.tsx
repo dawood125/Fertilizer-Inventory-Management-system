@@ -1,3 +1,4 @@
+import { useState, useMemo } from 'react';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { useSettings } from '@/context/SettingsContext';
 import { StatCard, BarChart, DonutChart } from '@/components/Charts';
@@ -8,7 +9,7 @@ import { Link } from '@/lib/router';
 import {
   TrendingUp, TrendingDown, DollarSign, Wallet, Landmark, Smartphone, ShoppingBag,
   Users, Package, AlertTriangle, PackageX, Receipt, Plus, BarChart3,
-  Truck, ArrowUpRight, ArrowDownRight, Clock,
+  Truck, ArrowUpRight, ArrowDownRight, Clock, Calendar,
 } from 'lucide-react';
 
 export function Dashboard({ navigate }: { navigate: (path: string) => void }) {
@@ -19,11 +20,13 @@ export function Dashboard({ navigate }: { navigate: (path: string) => void }) {
     categorySales,
     recentActivity,
     overdueCustomers,
+    expiryAlerts,
     loading,
     timeframe,
     setTimeframe,
   } = useDashboardData();
   const { symbol } = useSettings();
+  const [expiryTab, setExpiryTab] = useState<'all' | 'expired' | 'soon'>('all');
 
   if (loading || !stats) {
     return (
@@ -39,6 +42,14 @@ export function Dashboard({ navigate }: { navigate: (path: string) => void }) {
     label: new Date(d.date).toLocaleDateString('en', { weekday: 'short' }),
     value: d.sales,
   }));
+
+  const filteredExpiryAlerts = useMemo(() => {
+    return expiryAlerts.filter((item) => {
+      if (expiryTab === 'expired') return item.isExpired;
+      if (expiryTab === 'soon') return !item.isExpired;
+      return true;
+    });
+  }, [expiryAlerts, expiryTab]);
 
   const quickActions = [
     { label: 'Create Purchase', path: '/purchases', icon: <Truck size={18} />, color: 'bg-sky-600 hover:bg-sky-700' },
@@ -160,13 +171,171 @@ export function Dashboard({ navigate }: { navigate: (path: string) => void }) {
       </div>
 
       {/* Inventory stats */}
-      <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-5">
+      <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-6">
         <StatCard label="Total Orders" value={String(stats.totalOrders)} icon={<ShoppingBag size={20} />} color="slate" onClick={() => navigate('/orders')} />
         <StatCard label="Total Customers" value={String(stats.totalCustomers)} icon={<Users size={20} />} color="sky" onClick={() => navigate('/customers')} />
         <StatCard label="Total Products" value={String(stats.totalProducts)} icon={<Package size={20} />} color="violet" onClick={() => navigate('/products')} />
         <StatCard label="Low Stock" value={String(stats.lowStockCount)} icon={<AlertTriangle size={20} />} color="amber" onClick={() => navigate('/stock')} />
         <StatCard label="Out of Stock" value={String(stats.outOfStockCount)} icon={<PackageX size={20} />} color="rose" onClick={() => navigate('/stock')} />
+        <StatCard
+          label="Expiry Alerts"
+          value={String(stats.expiredCount + stats.nearExpiryCount)}
+          subtitle={
+            stats.expiredCount > 0
+              ? `${stats.expiredCount} expired, ${stats.nearExpiryCount} soon`
+              : stats.nearExpiryCount > 0
+              ? `${stats.nearExpiryCount} expiring soon`
+              : '0 expired'
+          }
+          icon={<Calendar size={20} />}
+          color={stats.expiredCount > 0 ? 'rose' : stats.nearExpiryCount > 0 ? 'amber' : 'emerald'}
+          onClick={() =>
+            navigate(
+              stats.expiredCount > 0
+                ? '/products?stockFilter=expired'
+                : '/products?stockFilter=near_expiry'
+            )
+          }
+        />
       </div>
+
+      {/* Product Expiry Alerts Section */}
+      {expiryAlerts.length > 0 && (
+        <div className="mt-4 rounded-2xl border border-rose-300 bg-rose-50/60 p-4 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-rose-200/80 pb-3 mb-3">
+            <div className="flex items-center gap-2">
+              <div className="rounded-lg bg-rose-200/80 p-1.5 text-rose-800">
+                <Calendar size={18} />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-rose-950">
+                  Product Expiry Alerts ({expiryAlerts.length})
+                </h3>
+                <p className="text-xs text-rose-700">
+                  Products that have expired or are expiring within the next 30 days
+                </p>
+              </div>
+            </div>
+
+            {/* Filter Tabs & Quick Action */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="inline-flex rounded-xl bg-rose-100/90 p-1 border border-rose-200/70 text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setExpiryTab('all')}
+                  className={cn(
+                    'rounded-lg px-2.5 py-1 transition cursor-pointer',
+                    expiryTab === 'all'
+                      ? 'bg-white text-rose-950 shadow-xs'
+                      : 'text-rose-700 hover:text-rose-950'
+                  )}
+                >
+                  All ({expiryAlerts.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExpiryTab('expired')}
+                  className={cn(
+                    'rounded-lg px-2.5 py-1 transition cursor-pointer',
+                    expiryTab === 'expired'
+                      ? 'bg-white text-rose-950 shadow-xs'
+                      : 'text-rose-700 hover:text-rose-950'
+                  )}
+                >
+                  Expired ({stats.expiredCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExpiryTab('soon')}
+                  className={cn(
+                    'rounded-lg px-2.5 py-1 transition cursor-pointer',
+                    expiryTab === 'soon'
+                      ? 'bg-white text-rose-950 shadow-xs'
+                      : 'text-rose-700 hover:text-rose-950'
+                  )}
+                >
+                  Expiring Soon ({stats.nearExpiryCount})
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  navigate(
+                    expiryTab === 'expired'
+                      ? '/products?stockFilter=expired'
+                      : expiryTab === 'soon'
+                      ? '/products?stockFilter=near_expiry'
+                      : stats.expiredCount > 0
+                      ? '/products?stockFilter=expired'
+                      : '/products?stockFilter=near_expiry'
+                  )
+                }
+                className="rounded-lg bg-rose-600 hover:bg-rose-700 px-3 py-1.5 text-xs font-bold text-white transition shadow-xs"
+              >
+                View in Products &rarr;
+              </button>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="text-rose-900 font-semibold border-b border-rose-200/60 pb-1">
+                  <th className="py-1">Product</th>
+                  <th className="py-1">Brand</th>
+                  <th className="py-1">Category</th>
+                  <th className="py-1">SKU</th>
+                  <th className="py-1 text-center">Stock</th>
+                  <th className="py-1">Expiry Date</th>
+                  <th className="py-1 text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-rose-200/50">
+                {filteredExpiryAlerts.slice(0, 6).map((item) => (
+                  <tr key={item.productId} className="hover:bg-rose-100/40">
+                    <td className="py-1.5 font-bold text-slate-900">{item.productName}</td>
+                    <td className="py-1.5 text-slate-600">{item.brandName || '—'}</td>
+                    <td className="py-1.5 text-slate-600">{item.categoryName || '—'}</td>
+                    <td className="py-1.5 font-mono text-slate-700">{item.sku}</td>
+                    <td className="py-1.5 text-center font-bold text-slate-800">
+                      {item.stockQuantity} pcs
+                    </td>
+                    <td className="py-1.5 font-medium text-slate-700">{item.expiryDate}</td>
+                    <td className="py-1.5 text-right">
+                      {item.isExpired ? (
+                        <span className="inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-extrabold text-rose-700 border border-rose-300">
+                          Expired ({Math.abs(item.daysRemaining)}d ago)
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold text-amber-800 border border-amber-300">
+                          {item.daysRemaining === 0 ? 'Expires today' : `Expires in ${item.daysRemaining}d`}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {filteredExpiryAlerts.length > 6 && (
+            <div className="mt-2.5 text-center border-t border-rose-200/60 pt-2">
+              <button
+                type="button"
+                onClick={() =>
+                  navigate(
+                    expiryTab === 'expired'
+                      ? '/products?stockFilter=expired'
+                      : '/products?stockFilter=near_expiry'
+                  )
+                }
+                className="text-xs font-bold text-rose-700 hover:text-rose-900 underline"
+              >
+                + {filteredExpiryAlerts.length - 6} more products with expiry alerts. View all in Products catalog &rarr;
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Overdue Customer Credit Alerts (Bug #24: Informative Alert Card) */}
       {overdueCustomers.length > 0 && (

@@ -37,6 +37,7 @@ export function runMigrations(db) {
     { name: '015_preserve_customer_order_snapshot', sql: MIGRATION_015 },
     { name: '016_order_due_date', sql: MIGRATION_016 },
     { name: '017_store_and_supplier_credits', sql: MIGRATION_017 },
+    { name: '018_product_expiry', sql: MIGRATION_018 },
   ];
 
   for (const m of migrations) {
@@ -604,5 +605,10 @@ const MIGRATION_017 = `
 ALTER TABLE orders ADD COLUMN store_credit_used INTEGER DEFAULT 0;
 ALTER TABLE orders ADD COLUMN previous_balance INTEGER DEFAULT NULL;
 ALTER TABLE purchase_orders ADD COLUMN supplier_credit_used INTEGER DEFAULT 0;
+`;
+
+const MIGRATION_018 = `
+ALTER TABLE products ADD COLUMN expiry_date TEXT;
+CREATE INDEX IF NOT EXISTS idx_products_expiry_date ON products(expiry_date);
 `;
 

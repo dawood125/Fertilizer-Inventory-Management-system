@@ -48,3 +48,47 @@ export const generateDocNumber = (prefix: string): string => {
 
 export const cn = (...classes: (string | false | null | undefined)[]): string =>
   classes.filter(Boolean).join(' ');
+
+export interface ProductExpiryStatus {
+  status: 'expired' | 'near_expiry' | 'valid' | 'none';
+  daysRemaining?: number;
+  label: string;
+}
+
+export const getProductExpiryStatus = (expiryDate?: string | null): ProductExpiryStatus => {
+  if (!expiryDate) {
+    return { status: 'none', label: 'No Expiry' };
+  }
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const exp = new Date(expiryDate);
+  exp.setHours(0, 0, 0, 0);
+
+  if (isNaN(exp.getTime())) {
+    return { status: 'none', label: 'Invalid Date' };
+  }
+
+  const diffTime = exp.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) {
+    return {
+      status: 'expired',
+      daysRemaining: diffDays,
+      label: `Expired (${Math.abs(diffDays)}d ago)`,
+    };
+  }
+  if (diffDays <= 30) {
+    return {
+      status: 'near_expiry',
+      daysRemaining: diffDays,
+      label: diffDays === 0 ? 'Expires today' : `Expires in ${diffDays}d`,
+    };
+  }
+  return {
+    status: 'valid',
+    daysRemaining: diffDays,
+    label: `Exp: ${expiryDate}`,
+  };
+};
+
