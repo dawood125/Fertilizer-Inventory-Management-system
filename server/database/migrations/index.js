@@ -38,6 +38,7 @@ export function runMigrations(db) {
     { name: '016_order_due_date', sql: MIGRATION_016 },
     { name: '017_store_and_supplier_credits', sql: MIGRATION_017 },
     { name: '018_product_expiry', sql: MIGRATION_018 },
+    { name: '019_purchase_item_expiry', sql: MIGRATION_019 },
   ];
 
   for (const m of migrations) {
@@ -611,4 +612,10 @@ const MIGRATION_018 = `
 ALTER TABLE products ADD COLUMN expiry_date TEXT;
 CREATE INDEX IF NOT EXISTS idx_products_expiry_date ON products(expiry_date);
 `;
+
+const MIGRATION_019 = `
+ALTER TABLE purchase_items ADD COLUMN expiry_date TEXT;
+CREATE INDEX IF NOT EXISTS idx_purchase_items_expiry ON purchase_items(expiry_date);
+`;
+
 

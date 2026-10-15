@@ -187,6 +187,7 @@ export interface PurchaseItem {
   wholesale_price?: number;
   dealer_price?: number;
   batch_number?: string;
+  expiry_date?: string | null;
   cartons?: number;
   pieces_per_carton?: number;
 }

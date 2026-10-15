@@ -111,13 +111,15 @@ export const PO_ITEMS_CSV_HEADERS = [
   'Product Name',
   'Quantity (Cartons)',
   'Buy Rate / Pc',
+  'Batch Number (optional)',
+  'Expiry Date (optional)',
   'SKU / Barcode (optional)',
 ];
 
 export const PO_ITEMS_CSV_SAMPLE_ROWS: (string | number)[][] = [
-  ['MULTI CLEAN 360ML', 8, 1000, 'MC-360'],
-  ['ZORAVAR 1000ML', 5, 1800, 'ZOR-1000'],
-  ['UREA SPECIAL 50KG', 20, 3200, 'UREA-50'],
+  ['MULTI CLEAN 360ML', 8, 1000, 'BATCH-MC-2026', '2027-12-31', 'MC-360'],
+  ['ZORAVAR 1000ML', 5, 1800, 'BATCH-ZR-2026', '2027-06-30', 'ZOR-1000'],
+  ['UREA SPECIAL 50KG', 20, 3200, 'BATCH-UR-2026', '2028-01-01', 'UREA-50'],
 ];
 
 // Sample CSV for Customer Import

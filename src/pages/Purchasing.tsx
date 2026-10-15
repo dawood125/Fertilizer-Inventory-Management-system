@@ -154,22 +154,26 @@ export function PurchaseOrders() {
             const receivedQty = Math.max(0, Number(item.quantity || 0)); // total pieces
             const receivedRate = Number(item.unit_cost || 0); // buy rate per piece
 
-            // 1. Create a true FIFO inventory batch layer with real chemical batch ID
+            // 1. Create a true FIFO inventory batch layer with real chemical batch ID and expiry date
             await receiveStockBatch(
               item.product_id,
               po.po_number,
               receivedQty,
               receivedRate,
               po.id,
-              item.batch_number || undefined
+              item.batch_number || undefined,
+              item.expiry_date || undefined
             );
 
-            // 2. Update product stock (in pieces), buy rate, and packing ratio if updated
+            // 2. Update product stock (in pieces), buy rate, packing ratio, and expiry date if updated
             const productUpdates: any = {
               stock_quantity: currentStock + receivedQty,
               purchase_price: receivedRate, // Last Purchase Rate per piece
               cost_price: receivedRate,     // Latest buy rate fallback
             };
+            if (item.expiry_date) {
+              productUpdates.expiry_date = item.expiry_date;
+            }
             if (Number(item.pieces_per_carton) > 0) {
               productUpdates.carton_to_box = Number(item.pieces_per_carton);
             }
@@ -440,6 +444,7 @@ export function PurchaseOrders() {
                   <tr>
                     <th>Product</th>
                     <th>Batch #</th>
+                    <th>Expiry Date</th>
                     <th>Cartons</th>
                     <th>Pcs/Ctn</th>
                     <th>Total Pcs</th>
@@ -456,6 +461,15 @@ export function PurchaseOrders() {
                         {it.batch_number ? (
                           <span className="font-mono text-xs font-semibold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100">
                             {it.batch_number}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 font-mono">—</span>
+                        )}
+                      </td>
+                      <td>
+                        {it.expiry_date ? (
+                          <span className="font-mono text-xs font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                            {it.expiry_date}
                           </span>
                         ) : (
                           <span className="text-slate-400 font-mono">—</span>
@@ -502,7 +516,7 @@ export function PurchaseOrders() {
             </div>
             <div className="overflow-x-auto rounded-xl border border-slate-200">
               <table className="data-table text-xs">
-                <thead><tr><th>Product</th><th>Batch #</th><th>Cartons</th><th>Pcs/Ctn</th><th>Total Pcs</th><th>Cost / Pc</th><th>Selling Rates</th><th className="text-right">Total</th></tr></thead>
+                <thead><tr><th>Product</th><th>Batch #</th><th>Expiry Date</th><th>Cartons</th><th>Pcs/Ctn</th><th>Total Pcs</th><th>Cost / Pc</th><th>Selling Rates</th><th className="text-right">Total</th></tr></thead>
                 <tbody>
                   {viewOrder.items?.map((it: any) => (
                     <tr key={it.id}>
@@ -514,6 +528,15 @@ export function PurchaseOrders() {
                           </span>
                         ) : (
                           <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td>
+                        {it.expiry_date ? (
+                          <span className="font-mono text-xs font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                            {it.expiry_date}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 font-mono">—</span>
                         )}
                       </td>
                       <td>{it.cartons || (it.pieces_per_carton ? (it.quantity / it.pieces_per_carton).toFixed(1) : '—')}</td>
@@ -666,6 +689,7 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
     quantity: number; // total pieces = cartons * pieces_per_carton
     cost: number; // buy cost per piece
     batch_number: string; // chemical manufacturer Batch ID
+    expiry_date?: string; // product expiry date
     retail_price: number;
     wholesale_price: number;
     dealer_price: number;
@@ -718,7 +742,7 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
     handleAddProduct(newProd);
   };
 
-  const handleAddItemsFromCsv = (items: { product: Product; quantity: number; cost: number }[]) => {
+  const handleAddItemsFromCsv = (items: { product: Product; quantity: number; cost: number; batch_number?: string; expiry_date?: string }[]) => {
     setLines((prev) => {
       const updated = [...prev];
       for (const item of items) {
@@ -732,6 +756,8 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
             cartons: newCtns,
             quantity: newCtns * (Number(updated[existingIdx].pieces_per_carton) || ppc),
             cost: item.cost || updated[existingIdx].cost,
+            batch_number: item.batch_number || updated[existingIdx].batch_number,
+            expiry_date: item.expiry_date || updated[existingIdx].expiry_date,
           };
         } else {
           updated.push({
@@ -740,7 +766,8 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
             pieces_per_carton: ppc,
             quantity: ctns * ppc,
             cost: item.cost || item.product.purchase_price || 0,
-            batch_number: '',
+            batch_number: item.batch_number || '',
+            expiry_date: item.expiry_date || item.product.expiry_date || '',
             retail_price: item.product.retail_price || 0,
             wholesale_price: item.product.wholesale_price || 0,
             dealer_price: item.product.dealer_price || 0,
@@ -788,6 +815,7 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
           quantity: pcsPerCtn, // 1 carton * pcsPerCtn pieces
           cost: p.purchase_price || 0,
           batch_number: '',
+          expiry_date: p.expiry_date || '',
           retail_price: p.retail_price || 0,
           wholesale_price: p.wholesale_price || 0,
           dealer_price: p.dealer_price || 0,
@@ -888,6 +916,7 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
           wholesale_price: l.wholesale_price || 0,
           dealer_price: l.dealer_price || 0,
           batch_number: l.batch_number?.trim() || null,
+          expiry_date: l.expiry_date?.trim() || null,
           cartons: l.cartons || 1,
           pieces_per_carton: l.pieces_per_carton || 1,
         });
@@ -1196,6 +1225,7 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
                   <tr>
                     <th className="px-3 py-3 text-left">Product</th>
                     <th className="px-3 py-3 text-left w-36">Batch #</th>
+                    <th className="px-3 py-3 text-left w-36">Expiry Date</th>
                     <th className="px-2 py-3 text-center w-28">Cartons</th>
                     <th className="px-2 py-3 text-center w-20">Pcs/Ctn</th>
                     <th className="px-2 py-3 text-center w-20">Total Pcs</th>
@@ -1246,6 +1276,16 @@ function CreatePOModal({ open, onClose, onCreated }: { open: boolean; onClose: (
                           onChange={(e) => updateLine(i, 'batch_number', e.target.value)}
                           placeholder="e.g. RF23RFA3700"
                           className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-mono text-xs font-semibold text-slate-800 focus:border-sky-500 focus:outline-none shadow-sm"
+                        />
+                      </td>
+
+                      {/* Expiry Date Input */}
+                      <td className="px-3 py-3">
+                        <input
+                          type="date"
+                          value={l.expiry_date || ''}
+                          onChange={(e) => updateLine(i, 'expiry_date', e.target.value)}
+                          className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-800 focus:border-sky-500 focus:outline-none shadow-sm"
                         />
                       </td>
 
@@ -1644,6 +1684,8 @@ interface ParsedPoItemRow {
   quantity: number;
   cost: number;
   skuOrBarcode: string;
+  batch_number?: string;
+  expiry_date?: string;
   status: 'matched' | 'not_found';
 }
 
@@ -1656,7 +1698,7 @@ function ImportPoItemsModal({
 }: {
   open: boolean;
   onClose: () => void;
-  onAddItems: (items: { product: Product; quantity: number; cost: number }[]) => void;
+  onAddItems: (items: { product: Product; quantity: number; cost: number; batch_number?: string; expiry_date?: string }[]) => void;
   products: Product[];
   symbol: string;
 }) {
@@ -1700,6 +1742,8 @@ function ImportPoItemsModal({
       const nameIdx = findIdx('product name', 'product', 'name', 'item');
       const qtyIdx = findIdx('quantity', 'qty', 'carton');
       const costIdx = findIdx('buy rate', 'purchase rate', 'cost', 'rate', 'price');
+      const batchIdx = findIdx('batch number', 'batch id', 'batch');
+      const expiryIdx = findIdx('expiry date', 'expiry', 'exp date', 'exp');
       const idIdx = findIdx('sku', 'barcode', 'code');
 
       const dataRows = rawRows.slice(1);
@@ -1708,6 +1752,8 @@ function ImportPoItemsModal({
         const skuOrBarcode = (idIdx >= 0 ? cols[idIdx] : '')?.trim() || '';
         const quantity = Math.max(1, Number((qtyIdx >= 0 ? cols[qtyIdx] : '1').replace(/[^0-9.]/g, '')) || 1);
         const rawCost = Number((costIdx >= 0 ? cols[costIdx] : '0').replace(/[^0-9.]/g, '')) || 0;
+        const batch_number = (batchIdx >= 0 ? cols[batchIdx] : '')?.trim() || '';
+        const expiry_date = (expiryIdx >= 0 ? cols[expiryIdx] : '')?.trim() || '';
 
         // Match product in catalog
         let matched: Product | null = null;
@@ -1737,6 +1783,8 @@ function ImportPoItemsModal({
           quantity,
           cost,
           skuOrBarcode,
+          batch_number,
+          expiry_date,
           status: matched ? 'matched' : 'not_found',
         };
       });
@@ -1758,6 +1806,8 @@ function ImportPoItemsModal({
       product: r.matchedProduct!,
       quantity: r.quantity,
       cost: r.cost,
+      batch_number: r.batch_number,
+      expiry_date: r.expiry_date,
     }));
     onAddItems(itemsToAdd);
     onClose();

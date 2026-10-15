@@ -5,6 +5,7 @@ export interface PurchaseOrderItem {
   id?: string;
   product_name: string;
   batch_number?: string | null;
+  expiry_date?: string | null;
   cartons?: number;
   pieces_per_carton?: number;
   quantity: number; // Total pieces
@@ -452,12 +453,13 @@ export function PurchaseOrderDocument({
             <thead>
               <tr>
                 <th style={{ width: '5%', textAlign: 'center' }}>Sr</th>
-                <th style={{ width: '39%' }}>Product Description (آئٹم نام)</th>
-                <th style={{ width: '14%', textAlign: 'center' }}>Batch #</th>
-                <th style={{ width: '10%', textAlign: 'center' }}>Cartons</th>
-                <th style={{ width: '10%', textAlign: 'center' }}>Total Pcs</th>
-                <th style={{ width: '11%', textAlign: 'right' }}>Buy Rate</th>
-                <th style={{ width: '11%', textAlign: 'right' }}>Total</th>
+                <th style={{ width: '33%' }}>Product Description (آئٹم نام)</th>
+                <th style={{ width: '13%', textAlign: 'center' }}>Batch #</th>
+                <th style={{ width: '11%', textAlign: 'center' }}>Expiry</th>
+                <th style={{ width: '9%', textAlign: 'center' }}>Cartons</th>
+                <th style={{ width: '9%', textAlign: 'center' }}>Total Pcs</th>
+                <th style={{ width: '10%', textAlign: 'right' }}>Buy Rate</th>
+                <th style={{ width: '10%', textAlign: 'right' }}>Total</th>
               </tr>
             </thead>
             <tbody>
@@ -469,6 +471,9 @@ export function PurchaseOrderDocument({
                     <td style={{ fontWeight: 800 }}>{it.product_name}</td>
                     <td style={{ textAlign: 'center', fontFamily: 'monospace', fontSize: '7.5px' }}>
                       {it.batch_number || '—'}
+                    </td>
+                    <td style={{ textAlign: 'center', fontFamily: 'monospace', fontSize: '7.5px' }}>
+                      {it.expiry_date || '—'}
                     </td>
                     <td style={{ textAlign: 'center', fontWeight: 700 }}>{ctns}</td>
                     <td style={{ textAlign: 'center', fontWeight: 900 }}>{it.quantity}</td>
@@ -483,7 +488,7 @@ export function PurchaseOrderDocument({
               })}
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: '12px', color: '#94a3b8' }}>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '12px', color: '#94a3b8' }}>
                     No purchase line items found.
                   </td>
                 </tr>
